@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.next/
+*.tsbuildinfo
+next-env.d.ts
+.env
+*.log
+
+# 파이프라인 산출물 (실제 정책 데이터는 커밋하지 않음)
+data/raw/*
+data/staging/*
+data/knowledge/*
+!data/raw/.gitkeep
+!data/staging/.gitkeep
+!data/knowledge/.gitkeep
+
+.DS_Store

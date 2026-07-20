@@ -1,0 +1,38 @@
+{
+  "name": "policy-sync-agent",
+  "version": "0.1.0",
+  "description": "파편화된 서비스 정책 문서(엑셀/피그마)를 통합 관리하고 영향도를 분석하는 AI 에이전트",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "cli": "tsx watch src/index.ts",
+    "parse:excel": "tsx src/parser/excelParser.ts",
+    "parse:figma": "tsx src/parser/figmaParser.ts",
+    "review": "tsx src/refine/reviewStore.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0",
+    "dotenv": "^16.4.5",
+    "next": "^16.2.10",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.7.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}
