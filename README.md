@@ -17,8 +17,8 @@
 - **엑셀 업로드 및 검증**: `.xlsx`를 올리면 '정책'/'용어'/'이용약관' 시트를 자동 인식해 고정
   스키마로 매핑하고, 필수값 누락/형식 오류를 표에서 빨간색으로 표시합니다. 인라인 수정은 물론
   원치 않는 행은 삭제한 뒤 일괄 등록할 수 있습니다.
-- **목록 보기**: 헤더의 "목록 보기" 버튼으로 등록된 정책/용어/이용약관을 탭+검색으로 조회할 수
-  있습니다.
+- **목록 보기**: 사이드바의 "정책 목록" 메뉴로 등록된 정책/용어/이용약관을 탭+검색+아코디언으로
+  조회할 수 있습니다.
 
 ## 기술 스택
 
@@ -54,6 +54,59 @@ npm run migrate:legacy
 
 정책 스키마에 맞지 않아 원문을 통째로 옮긴 항목, 사용여부/필수여부 값이 예상 범위를 벗어난
 항목은 실행 결과에 별도로 나열되니 수동으로 검토하세요.
+
+## Railway 배포
+
+이 앱은 정책/용어/이용약관/계정 데이터를 `data/` 아래 JSON 파일에 직접 읽고 씁니다
+(`recordStore`의 메모리 캐시 포함). 그래서 요청마다 컨테이너가 새로 뜨는 서버리스(Vercel 등)
+보다는, 계속 떠 있는 컨테이너에 **영속 볼륨**을 붙일 수 있는 Railway 같은 플랫폼이 잘 맞습니다.
+`railway.json`에 빌드/실행 설정은 들어있지만, **볼륨은 config-as-code 파일로 지정할 수 없고
+반드시 대시보드(또는 Railway CLI)에서 붙여야 합니다** — 아래 절차를 따라주세요.
+
+### 1. 가입 → GitHub 연동 → 프로젝트 생성
+
+1. [railway.com](https://railway.com)에 GitHub 계정으로 가입/로그인합니다.
+2. 대시보드에서 **New Project → Deploy from GitHub repo**를 선택하고, 최초 1회 Railway GitHub
+   App에 이 저장소(`Songyena/policy-ai-agent`) 접근 권한을 승인합니다.
+3. 저장소를 선택하면 `package.json`(Node 20+ 지정, `engines.node`)과 `railway.json`을 자동
+   인식해 Railpack 빌더로 `npm run build` → `npm start`를 실행하도록 구성됩니다. 별도 Node
+   버전 설정은 필요 없습니다(이미 `package.json`의 `engines.node: ">=20.0.0"`으로 지정되어 있음).
+
+### 2. 볼륨(Volume) 설정 — `data/` 영속화
+
+1. 생성된 서비스 타일을 우클릭(또는 서비스 클릭 후 메뉴) → **Attach Volume**.
+2. **Mount Path**를 `/app/data`로 지정합니다 — Railway의 Railpack 빌드는 앱을 컨테이너의 `/app`
+   에 두므로, 코드가 쓰는 상대 경로 `./data/...`가 실제로는 `/app/data/...`로 풀립니다. 이 경로가
+   맞아야 `data/knowledge/*.json`, `data/users.json`, `data/raw/*`가 전부 볼륨 안에 들어갑니다.
+3. 볼륨 크기를 정하고 저장하면 서비스가 재배포됩니다. 이후 재배포/재시작을 해도 이 볼륨 안의
+   데이터는 유지됩니다(볼륨을 안 붙이면 재배포 때마다 데이터가 초기화됩니다).
+
+### 3. 환경변수
+
+서비스 → **Variables** 탭에서 아래 값을 등록합니다.
+
+| 변수 | 필수 여부 | 설명 |
+|---|---|---|
+| `OPENAI_API_KEY` | 필수 | 대화형 에이전트(tool calling)가 사용하는 OpenAI API 키 |
+| `SESSION_SECRET` | 필수 | 로그인 세션 쿠키 서명에 쓰는 임의의 긴 무작위 문자열 |
+| `RAW_DATA_DIR`, `POLICIES_DATA_PATH`, `TERMS_DATA_PATH`, `TERMS_CONDITIONS_DATA_PATH`, `ACTIVITY_LOG_PATH`, `USERS_DATA_PATH` | 선택 | 기본값이 전부 `./data/...` 아래이므로, 볼륨을 `/app/data`에 붙였다면 따로 설정할 필요 없음 |
+
+### 4. 실행 커맨드
+
+`railway.json`에 이미 지정되어 있어 별도 설정이 필요 없습니다.
+
+```json
+{
+  "build": { "builder": "RAILPACK", "buildCommand": "npm run build" },
+  "deploy": { "startCommand": "npm start" }
+}
+```
+
+### 5. 도메인 생성
+
+서비스 → **Settings → Networking → Generate Domain**을 누르면 `*.up.railway.app` 형태의
+공개 URL이 즉시 발급됩니다. 커스텀 도메인을 쓰려면 같은 화면의 **Custom Domain**에서 도메인을
+추가하고 안내되는 CNAME 레코드를 DNS에 등록하면 됩니다.
 
 ## 데이터 스키마
 
