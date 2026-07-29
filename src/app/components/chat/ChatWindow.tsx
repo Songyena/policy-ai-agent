@@ -13,15 +13,11 @@ function nextMessageId(): string {
   return `msg-${messageIdCounter}`;
 }
 
-const WELCOME_MESSAGE: DisplayMessage = {
-  id: nextMessageId(),
-  role: "assistant",
-  content:
-    "안녕하세요! 정책/용어/이용약관을 조회하거나 등록할 수 있어요. '/'를 입력하면 빠른 명령을 볼 수 있고, 엑셀 파일을 올리면 여러 건을 한 번에 검증/등록할 수 있습니다.",
-};
+const INPUT_PLACEHOLDER =
+  "정책/용어/이용약관을 물어보거나 등록해보세요 · '/'로 빠른 명령 · 📎로 엑셀 업로드";
 
 export default function ChatWindow() {
-  const [display, setDisplay] = useState<DisplayMessage[]>([WELCOME_MESSAGE]);
+  const [display, setDisplay] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
@@ -169,63 +165,77 @@ export default function ChatWindow() {
     }
   }
 
+  const composer = (
+    <div className="relative">
+      {showSlashMenu && <SlashCommandMenu filter={input.slice(1)} onSelect={handleSelectSlashCommand} />}
+      <div className="flex items-end gap-2">
+        <button
+          type="button"
+          title="엑셀 업로드"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="rounded-control border border-border px-3 py-2 text-subtle hover:bg-page-bg disabled:cursor-not-allowed"
+        >
+          {isUploading ? "..." : "📎"}
+        </button>
+        <textarea
+          ref={textareaRef}
+          value={input}
+          onChange={(e) => handleInputChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
+          rows={1}
+          placeholder={INPUT_PLACEHOLDER}
+          className="flex-1 resize-none rounded-control border border-border px-3 py-2 text-sm text-ink focus:border-primary focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={handleSend}
+          disabled={isSending || !input.trim()}
+          className="rounded-control bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          전송
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="mx-auto flex max-w-2xl flex-col gap-4">
-          {display.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              onConfirmCard={handleConfirmCard}
-              onCancelCard={handleCancelCard}
-            />
-          ))}
-          {isSending && <span className="text-xs text-subtle">생각하는 중...</span>}
-        </div>
-      </div>
+      <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleFileSelected} />
 
-      <div className="border-t border-border bg-surface px-6 py-4">
-        <div className="relative mx-auto max-w-2xl">
-          {showSlashMenu && (
-            <SlashCommandMenu filter={input.slice(1)} onSelect={handleSelectSlashCommand} />
-          )}
-          <div className="flex items-end gap-2">
-            <button
-              type="button"
-              title="엑셀 업로드"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="rounded-control border border-border px-3 py-2 text-subtle hover:bg-page-bg disabled:cursor-not-allowed"
-            >
-              {isUploading ? "..." : "📎"}
-            </button>
-            <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleFileSelected} />
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => handleInputChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              rows={1}
-              placeholder="메시지를 입력하세요 ('/'로 빠른 명령)"
-              className="flex-1 resize-none rounded-control border border-border px-3 py-2 text-sm text-ink focus:border-primary focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={isSending || !input.trim()}
-              className="rounded-control bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              전송
-            </button>
+      {display.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center px-6">
+          <div className="w-full max-w-2xl">
+            <h1 className="mb-6 text-center text-2xl font-semibold text-ink">정책 Agent</h1>
+            {composer}
           </div>
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="flex-1 overflow-y-auto px-6 py-6">
+            <div className="mx-auto flex max-w-2xl flex-col gap-4">
+              {display.map((message) => (
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                  onConfirmCard={handleConfirmCard}
+                  onCancelCard={handleCancelCard}
+                />
+              ))}
+              {isSending && <span className="text-xs text-subtle">생각하는 중...</span>}
+            </div>
+          </div>
+
+          <div className="border-t border-border bg-surface px-6 py-4">
+            <div className="mx-auto max-w-2xl">{composer}</div>
+          </div>
+        </>
+      )}
 
       {parsedWorkbook && (
         <ExcelValidationModal

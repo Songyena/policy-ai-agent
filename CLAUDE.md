@@ -27,13 +27,21 @@
 삭제 → 검색"을 구현한다. 세 스토어(`policyStore`/`termStore`/`termsConditionsStore`)는
 파일 경로/중복 판단 키(`keyOf`)/검색 대상 텍스트만 다르게 주입한 것이다.
 
-- 정책의 중복 키: 구분+정책명+세부항목
+- 정책의 중복 키: 정책명+세부항목 (구분은 선택 항목이라 키에서 뺐다 — 넣으면 같은 정책이
+  구분 표기 차이로 중복 저장될 수 있다)
 - 용어의 중복 키: 표준 용어
-- 이용약관의 중복 키: 관리코드
+- 이용약관의 중복 키: 관리코드가 있으면 관리코드, 없으면(선택 항목) 약관명+기기구분으로 대체
 
 같은 키로 다시 등록하면 신규가 아니라 **개정**(revision +1, 이전 필드는 `history`에 스냅샷)으로
 처리된다. `author`/`updatedAt` 필드가 곧 "작성/수정자"·"작성/수정일"이므로 별도의
 createdBy/createdAt을 두지 않는다.
+
+**필수 필드는 이름 필드 하나뿐이다**: 정책은 정책명, 용어는 표준 용어, 이용약관은 약관명만
+필수(`POLICY_REQUIRED_FIELDS` 등, 각 `src/types/*.ts`)이고 나머지는 전부 선택 항목이다.
+값이 없으면 문자열 필드는 zod 스키마의 `.default("")`(또는 termsConditions의 useStatus="사용"/
+requiredStatus="선택"/deviceCategory="공통")로 채워진다. 새 필수 필드를 늘리고 싶어질 때는
+"등록 시 반드시 있어야만 그 레코드가 의미가 있는가"(예: 식별용 관리코드)로 판단하고, 그 외에는
+선택 항목으로 두는 편이 엑셀 대량 업로드 시 오류로 막히는 행을 줄인다.
 
 > **주의(캐시)**: `recordStore.ts`는 모듈 레벨 in-memory 캐시를 쓴다. 서버 프로세스가 떠 있는
 > 동안 `data/knowledge/*.json`을 직접 손으로 편집하면, 다음 쓰기(create/revise) 때 서버가
@@ -86,6 +94,19 @@ AI 정제(`refine`) + 검수 대기(`staging`) 2단계 파이프라인은 없앴
 헤더 시작/끝 행 판단 등)은 실제 사내 엑셀 양식(제목행/병합 헤더가 섞인 문서)을 다루기 위한
 것이므로, 헤더 판단 순서(원본 값 기준 판단 → 병합 채우기는 그 다음)를 바꾸지 않는다.
 
+`ExcelValidationModal`/`ParsingValidationTable`은 모달 안에서 원하지 않는 행을 "삭제" 버튼으로
+빼고 등록할 수 있다(로컬 state에서만 제거, 서버에는 애초에 보내지 않음) — 오류가 있는 행을
+억지로 통과시키는 게 아니라, 필수 필드(이름)만 맞으면 통과되고 나머지는 사용자가 직접 정리하는
+방식이다.
+
+### 단일 채팅 화면: 대화 시작 전/후 레이아웃 전환
+
+`ChatWindow.tsx`는 `display`(렌더링용 메시지 목록)가 비어 있으면(첫 메시지 전) 입력창을 화면
+중앙에 두고(Claude 스타일), 안내 문구는 별도 메시지 버블이 아니라 입력창 placeholder
+(`INPUT_PLACEHOLDER`)로만 보여준다. 첫 메시지를 보내는 순간 `display`가 비지 않게 되어
+일반적인 "위쪽 메시지 목록 + 아래쪽 고정 입력창" 레이아웃으로 전환된다. 두 레이아웃은 같은
+`composer` JSX를 재사용한다 — 입력창 관련 로직을 두 곳에 복사하지 않는다.
+
 ## 3. 폴더 구조
 
 | 경로 | 역할 |
@@ -101,10 +122,11 @@ AI 정제(`refine`) + 검수 대기(`staging`) 2단계 파이프라인은 없앴
 | `src/agent/chatAgent.ts` | tool calling 루프 (세션 상태 없이 매 요청 전체 이력 처리) |
 | `src/auth/` | 로그인 세션(HMAC 서명 쿠키) 및 사용자 저장소 (`data/users.json`) |
 | `src/app/page.tsx` | 로그인 필요 — 루트가 곧 단일 채팅 화면(별도 페이지 이동 없음) |
-| `src/app/components/chat/` | ChatShell/ChatWindow/MessageBubble/ConfirmCard/SlashCommandMenu/ExcelValidationModal/ParsingValidationTable |
+| `src/app/components/chat/` | ChatShell/ChatWindow/MessageBubble/ConfirmCard/SlashCommandMenu/ExcelValidationModal/ParsingValidationTable/RecordListModal |
 | `src/app/api/chat` | 대화 1턴 처리 (tool calling, 세션 미저장) |
 | `src/app/api/excel/parse`, `/commit` | 엑셀 업로드 파싱 / 검증 모달에서 확정한 행 일괄 커밋 |
 | `src/app/api/registry/confirm` | 대화형 등록의 확인 카드에서 "등록" 클릭 시 커밋 |
+| `src/app/api/policies`, `/terms`, `/terms-conditions` | 읽기 전용 GET — 헤더의 "목록 보기"(`RecordListModal`)가 사용. `?q=`로 검색 |
 | `scripts/migrate-legacy-data.ts` | 이전 버전(동적 필드) 데이터를 새 고정 스키마로 옮기는 1회성 마이그레이션 |
 | `data/knowledge/{policies,terms,terms_conditions}.json` | 엔티티별 지식창고 |
 | `data/users.json` | 회원 계정 (비밀번호는 scrypt 해시로만 저장) |

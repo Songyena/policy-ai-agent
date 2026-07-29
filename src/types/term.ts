@@ -7,8 +7,8 @@ import { z } from "zod";
 export const TermFieldsSchema = z.object({
   standardTerm: z.string().min(1), // 표준 용어
   synonyms: z.array(z.string().min(1)).default([]), // 유사어/혼용어
-  uiMenu: z.string().min(1), // 노출 위치/메뉴
-  definition: z.string().min(1), // 용어 정의
+  uiMenu: z.string().default(""), // 노출 위치/메뉴
+  definition: z.string().default(""), // 용어 정의
   note: z.string().default(""), // 비고
   author: z.string().min(1), // 작성/수정자
   updatedAt: z.string().min(1), // 작성/수정일 (ISO 8601)
@@ -18,11 +18,8 @@ export type TermFields = z.infer<typeof TermFieldsSchema>;
 export const TermDraftFieldsSchema = TermFieldsSchema.partial();
 export type TermDraftFields = z.infer<typeof TermDraftFieldsSchema>;
 
-export const TERM_REQUIRED_FIELDS = [
-  "standardTerm",
-  "uiMenu",
-  "definition",
-] as const satisfies readonly (keyof TermFields)[];
+/** 표준 용어 외에는 전부 선택 항목이다. */
+export const TERM_REQUIRED_FIELDS = ["standardTerm"] as const satisfies readonly (keyof TermFields)[];
 
 export const TermRecordSchema = TermFieldsSchema.extend({
   id: z.string(),

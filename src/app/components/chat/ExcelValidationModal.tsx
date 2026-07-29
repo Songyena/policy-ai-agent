@@ -98,6 +98,16 @@ export default function ExcelValidationModal({
     );
   }
 
+  /** 원하지 않는 행(오류가 있거나 그냥 빼고 싶은 행)을 등록 대상에서 제외한다. */
+  function handleDeleteRow(rowIndex: number) {
+    setSheets((prev) =>
+      prev.map((sheet, index) => {
+        if (index !== activeTab) return sheet;
+        return { ...sheet, rows: sheet.rows.filter((row) => row.rowIndex !== rowIndex) };
+      }),
+    );
+  }
+
   async function handleSubmit() {
     setIsSubmitting(true);
     setErrorMessage(null);
@@ -164,12 +174,17 @@ export default function ExcelValidationModal({
             </div>
 
             <div className="flex-1 overflow-auto px-5 py-4">
-              {activeSheet && (
-                <ParsingValidationTable
-                  type={activeSheet.type}
-                  rows={activeSheet.rows}
-                  onChangeCell={handleChangeCell}
-                />
+              {activeSheet && activeSheet.rows.length === 0 ? (
+                <p className="py-8 text-center text-sm text-subtle">이 시트에는 남은 행이 없습니다.</p>
+              ) : (
+                activeSheet && (
+                  <ParsingValidationTable
+                    type={activeSheet.type}
+                    rows={activeSheet.rows}
+                    onChangeCell={handleChangeCell}
+                    onDeleteRow={handleDeleteRow}
+                  />
+                )
               )}
             </div>
           </>

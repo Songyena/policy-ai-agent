@@ -9,7 +9,7 @@ function buildWorkbookBuffer(): Buffer {
   const policySheet = XLSX.utils.aoa_to_sheet([
     ["구분", "정책명", "세부항목", "설명1", "설명2", "예시", "작성자", "작성일"],
     ["채번규칙", "관리번호 채번규칙", "신용평가등급확인서", "CV+YYMMDD+4자리", "설명", "CV2411120001", "송예나", "2024-11-12"],
-    ["결제정책", "환불정책", "", "", "", "", "", ""],
+    ["결제정책", "", "", "", "", "", "", ""],
   ]);
   XLSX.utils.book_append_sheet(workbook, policySheet, "정책");
 
@@ -47,28 +47,26 @@ test("parsePolicyWorkbook detects sheet types by name and maps headers to fixed 
   assert.deepEqual(policySheet.rows[0]?.errors, {});
 });
 
-test("parsePolicyWorkbook flags missing required fields per entity type", () => {
+test("parsePolicyWorkbook only flags the name field as required; other fields are optional", () => {
   const result = parsePolicyWorkbook(buildWorkbookBuffer());
 
   const policySheet = result.sheets.find((s) => s.type === "policy")!;
-  const invalidPolicyRow = policySheet.rows[1]!;
-  assert.equal(invalidPolicyRow.errors.ruleDesc, "필수 항목입니다");
-  assert.equal(invalidPolicyRow.errors.example, "필수 항목입니다");
+  const rowMissingName = policySheet.rows[1]!;
+  assert.deepEqual(rowMissingName.errors, { policyName: "필수 항목입니다" });
 
   const termSheet = result.sheets.find((s) => s.type === "term")!;
-  const invalidTermRow = termSheet.rows[1]!;
-  assert.equal(invalidTermRow.errors.standardTerm, "필수 항목입니다");
-  assert.equal(invalidTermRow.errors.uiMenu, "필수 항목입니다");
+  const rowMissingName2 = termSheet.rows[1]!;
+  assert.deepEqual(rowMissingName2.errors, { standardTerm: "필수 항목입니다" });
 });
 
-test("parsePolicyWorkbook validates enum-like fields for termsConditions", () => {
+test("parsePolicyWorkbook validates enum-like fields for termsConditions without requiring them", () => {
   const result = parsePolicyWorkbook(buildWorkbookBuffer());
 
   const termsConditionsSheet = result.sheets.find((s) => s.type === "termsConditions")!;
   const validRow = termsConditionsSheet.rows[0]!;
   assert.deepEqual(validRow.errors, {});
 
+  // requiredStatus is blank but optional now, so only the invalid useStatus value ("Y") is flagged.
   const invalidRow = termsConditionsSheet.rows[1]!;
-  assert.equal(invalidRow.errors.useStatus, "사용 또는 미사용 중 하나여야 합니다");
-  assert.equal(invalidRow.errors.requiredStatus, "필수 항목입니다");
+  assert.deepEqual(invalidRow.errors, { useStatus: "사용 또는 미사용 중 하나여야 합니다" });
 });
