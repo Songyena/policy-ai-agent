@@ -1,7 +1,7 @@
 import type { PolicyFields, PolicyRecord } from "../types/policy";
 import type { TermFields, TermRecord } from "../types/term";
 import type { TermsConditionsFields, TermsConditionsRecord } from "../types/termsConditions";
-import { logActivity } from "./activityLog";
+import { initActivityLog, logActivity } from "./activityLog";
 import { policyStore } from "./policyStore";
 import { termStore } from "./termStore";
 import { termsConditionsStore } from "./termsConditionsStore";
@@ -61,4 +61,5 @@ export function initAllStores(): void {
   policyStore.init();
   termStore.init();
   termsConditionsStore.init();
+  initActivityLog();
 }

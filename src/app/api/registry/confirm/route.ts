@@ -37,14 +37,21 @@ export async function POST(request: Request) {
   const updatedAt = new Date().toISOString();
   const { type, fields } = parsed.data;
 
-  if (type === "policy") {
-    const result = registerPolicy({ ...fields, author: user.name, updatedAt }, user.name);
+  try {
+    if (type === "policy") {
+      const result = registerPolicy({ ...fields, author: user.name, updatedAt }, user.name);
+      return NextResponse.json(result);
+    }
+    if (type === "term") {
+      const result = registerTerm({ ...fields, author: user.name, updatedAt }, user.name);
+      return NextResponse.json(result);
+    }
+    const result = registerTermsConditions({ ...fields, author: user.name, updatedAt }, user.name);
     return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json(
+      { error: `등록 실패: ${error instanceof Error ? error.message : String(error)}` },
+      { status: 500 },
+    );
   }
-  if (type === "term") {
-    const result = registerTerm({ ...fields, author: user.name, updatedAt }, user.name);
-    return NextResponse.json(result);
-  }
-  const result = registerTermsConditions({ ...fields, author: user.name, updatedAt }, user.name);
-  return NextResponse.json(result);
 }

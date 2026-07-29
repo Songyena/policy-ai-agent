@@ -16,8 +16,19 @@ function load(): ActivityLogEntry[] {
     writeFileSync(env.ACTIVITY_LOG_PATH, "[]", "utf-8");
     return cache;
   }
-  cache = JSON.parse(readFileSync(env.ACTIVITY_LOG_PATH, "utf-8")) as ActivityLogEntry[];
+  try {
+    cache = JSON.parse(readFileSync(env.ACTIVITY_LOG_PATH, "utf-8")) as ActivityLogEntry[];
+  } catch (error) {
+    console.error(`[activityLog] ${env.ACTIVITY_LOG_PATH} 파싱 실패 - 빈 상태로 재초기화합니다.`, error);
+    cache = [];
+    writeFileSync(env.ACTIVITY_LOG_PATH, "[]", "utf-8");
+  }
   return cache;
+}
+
+/** 서버 시작 시점에 미리 파일/디렉터리를 준비해두기 위한 진입점(instrumentation.ts에서 호출). */
+export function initActivityLog(): void {
+  load();
 }
 
 function persist(entries: ActivityLogEntry[]): void {

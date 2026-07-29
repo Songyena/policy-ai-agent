@@ -33,8 +33,14 @@ export async function POST(request: Request) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  mkdirSync(env.RAW_DATA_DIR, { recursive: true });
-  writeFileSync(join(env.RAW_DATA_DIR, `${Date.now()}-${file.name}`), buffer);
+  // 업로드 원본을 감사(audit) 목적으로 남겨두는 것뿐이라, 이게 실패한다고 실제 파싱까지
+  // 막을 이유는 없다 — 실패해도 로그만 남기고 계속 진행한다.
+  try {
+    mkdirSync(env.RAW_DATA_DIR, { recursive: true });
+    writeFileSync(join(env.RAW_DATA_DIR, `${Date.now()}-${file.name}`), buffer);
+  } catch (error) {
+    console.error(`[excel/parse] 업로드 원본 저장 실패(${env.RAW_DATA_DIR}) - 파싱은 계속 진행합니다.`, error);
+  }
 
   try {
     const parsed = parsePolicyWorkbook(buffer);

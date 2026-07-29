@@ -15,7 +15,18 @@ function ensureUsersFile(): void {
 
 function readAll(): User[] {
   ensureUsersFile();
-  return JSON.parse(readFileSync(env.USERS_DATA_PATH, "utf-8")) as User[];
+  try {
+    return JSON.parse(readFileSync(env.USERS_DATA_PATH, "utf-8")) as User[];
+  } catch (error) {
+    console.error(`[userStore] ${env.USERS_DATA_PATH} 파싱 실패 - 빈 상태로 재초기화합니다.`, error);
+    writeFileSync(env.USERS_DATA_PATH, "[]", "utf-8");
+    return [];
+  }
+}
+
+/** 서버 시작 시점에 미리 파일/디렉터리를 준비해두기 위한 진입점(instrumentation.ts에서 호출). */
+export function initUsersStore(): void {
+  ensureUsersFile();
 }
 
 function writeAll(users: User[]): void {

@@ -16,7 +16,6 @@ const MODE_HINTS: Record<string, string> = {
 };
 
 export async function POST(request: Request) {
-  initAllStores();
   const body = await request.json().catch(() => null);
   const parsed = RequestSchema.safeParse(body);
   if (!parsed.success) {
@@ -26,6 +25,7 @@ export async function POST(request: Request) {
   const modeHint = parsed.data.mode ? MODE_HINTS[parsed.data.mode] : undefined;
 
   try {
+    initAllStores();
     const result = await runChatTurn(
       parsed.data.messages as unknown as ChatCompletionMessageParam[],
       modeHint,

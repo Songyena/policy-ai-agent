@@ -56,30 +56,38 @@ export async function POST(request: Request) {
         updatedAt: row.fields.updatedAt || now,
       };
 
-      if (sheet.type === "policy") {
-        const result = PolicyFieldsSchema.safeParse(withDefaults);
-        if (!result.success) {
-          failed.push({ sheetName: sheet.sheetName, rowIndex: row.rowIndex, errors: result.error.issues.map((i) => i.message) });
-          continue;
+      try {
+        if (sheet.type === "policy") {
+          const result = PolicyFieldsSchema.safeParse(withDefaults);
+          if (!result.success) {
+            failed.push({ sheetName: sheet.sheetName, rowIndex: row.rowIndex, errors: result.error.issues.map((i) => i.message) });
+            continue;
+          }
+          registerPolicy(result.data, user.name);
+          committed.policy += 1;
+        } else if (sheet.type === "term") {
+          const result = TermFieldsSchema.safeParse(withDefaults);
+          if (!result.success) {
+            failed.push({ sheetName: sheet.sheetName, rowIndex: row.rowIndex, errors: result.error.issues.map((i) => i.message) });
+            continue;
+          }
+          registerTerm(result.data, user.name);
+          committed.term += 1;
+        } else {
+          const result = TermsConditionsFieldsSchema.safeParse(withDefaults);
+          if (!result.success) {
+            failed.push({ sheetName: sheet.sheetName, rowIndex: row.rowIndex, errors: result.error.issues.map((i) => i.message) });
+            continue;
+          }
+          registerTermsConditions(result.data, user.name);
+          committed.termsConditions += 1;
         }
-        registerPolicy(result.data, user.name);
-        committed.policy += 1;
-      } else if (sheet.type === "term") {
-        const result = TermFieldsSchema.safeParse(withDefaults);
-        if (!result.success) {
-          failed.push({ sheetName: sheet.sheetName, rowIndex: row.rowIndex, errors: result.error.issues.map((i) => i.message) });
-          continue;
-        }
-        registerTerm(result.data, user.name);
-        committed.term += 1;
-      } else {
-        const result = TermsConditionsFieldsSchema.safeParse(withDefaults);
-        if (!result.success) {
-          failed.push({ sheetName: sheet.sheetName, rowIndex: row.rowIndex, errors: result.error.issues.map((i) => i.message) });
-          continue;
-        }
-        registerTermsConditions(result.data, user.name);
-        committed.termsConditions += 1;
+      } catch (error) {
+        failed.push({
+          sheetName: sheet.sheetName,
+          rowIndex: row.rowIndex,
+          errors: [error instanceof Error ? error.message : String(error)],
+        });
       }
     }
   }

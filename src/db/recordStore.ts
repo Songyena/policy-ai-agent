@@ -35,6 +35,12 @@ export function createRecordStore<TFields extends Record<string, unknown>>(
   const { filePath, keyOf, searchableText } = options;
   let cache: StoreShape<TFields> | undefined;
 
+  /**
+   * 파일이 없으면(빈 볼륨을 새로 마운트한 첫 배포 등) 빈 상태로 새로 만든다.
+   * 파일은 있지만 내용이 손상되어 JSON 파싱이 실패하는 경우(이전 프로세스가 쓰기 도중 죽은 경우
+   * 등)에도 크래시 대신 빈 상태로 되돌린다 — 필드 하나 읽으려다 서버 전체가 죽는 것보다는
+   * 데이터를 잃더라도 서비스가 뜨는 편이 낫다.
+   */
   function load(): StoreShape<TFields> {
     if (cache) return cache;
     mkdirSync(dirname(filePath), { recursive: true });
@@ -43,7 +49,13 @@ export function createRecordStore<TFields extends Record<string, unknown>>(
       writeFileSync(filePath, JSON.stringify(cache, null, 2), "utf-8");
       return cache;
     }
-    cache = JSON.parse(readFileSync(filePath, "utf-8")) as StoreShape<TFields>;
+    try {
+      cache = JSON.parse(readFileSync(filePath, "utf-8")) as StoreShape<TFields>;
+    } catch (error) {
+      console.error(`[recordStore] ${filePath} 파싱 실패 - 빈 상태로 재초기화합니다.`, error);
+      cache = { version: 1, items: [] };
+      writeFileSync(filePath, JSON.stringify(cache, null, 2), "utf-8");
+    }
     return cache;
   }
 
