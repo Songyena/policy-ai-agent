@@ -15,8 +15,8 @@ Clean / Modern / Professional B2B SaaS Dashboard. 눈이 편안한 뉴트럴 배
 |---|---|---|---|
 | 페이지 배경 | `--color-page-bg` | `#F8F9FA` | `bg-page-bg` |
 | 카드/패널 배경 | `--color-surface` | `#FFFFFF` | `bg-surface` |
-| Primary(브랜드 블루) | `--color-primary` | `#2563EB` | `bg-primary` `text-primary` `border-primary` |
-| Primary Hover | `--color-primary-hover` | `#1D4FC4` | `hover:bg-primary-hover` |
+| Primary(코랄/오렌지 액센트) | `--color-primary` | `#D85A30` | `bg-primary` `text-primary` `border-primary` |
+| Primary Hover | `--color-primary-hover` | `#C14E27` | `hover:bg-primary-hover` |
 | 본문 텍스트(Primary) | `--color-ink` | `#111827` | `text-ink` |
 | 보조 텍스트(Secondary) | `--color-subtle` | `#6B7280` | `text-subtle` |
 | 구분선 | `--color-border` | `#E5E7EB` | `border-border` |

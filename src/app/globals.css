@@ -13,9 +13,9 @@
   --color-page-bg: #f8f9fa;
   --color-surface: #ffffff;
 
-  /* Primary */
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4fc4;
+  /* Primary (코랄/오렌지 액센트) */
+  --color-primary: #d85a30;
+  --color-primary-hover: #c14e27;
 
   /* Text */
   --color-ink: #111827; /* Text Primary */

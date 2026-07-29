@@ -16,7 +16,11 @@ function nextMessageId(): string {
 const INPUT_PLACEHOLDER =
   "정책/용어/이용약관을 물어보거나 등록해보세요 · '/'로 빠른 명령 · 📎로 엑셀 업로드";
 
-export default function ChatWindow() {
+interface ChatWindowProps {
+  userName: string;
+}
+
+export default function ChatWindow({ userName }: ChatWindowProps) {
   const [display, setDisplay] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -168,13 +172,13 @@ export default function ChatWindow() {
   const composer = (
     <div className="relative">
       {showSlashMenu && <SlashCommandMenu filter={input.slice(1)} onSelect={handleSelectSlashCommand} />}
-      <div className="flex items-end gap-2">
+      <div className="flex items-stretch gap-2">
         <button
           type="button"
           title="엑셀 업로드"
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
-          className="rounded-control border border-border px-3 py-2 text-subtle hover:bg-page-bg disabled:cursor-not-allowed"
+          className="flex h-16 shrink-0 items-center rounded-control border border-border px-3 text-subtle hover:bg-page-bg disabled:cursor-not-allowed"
         >
           {isUploading ? "..." : "📎"}
         </button>
@@ -188,19 +192,34 @@ export default function ChatWindow() {
               handleSend();
             }
           }}
-          rows={1}
           placeholder={INPUT_PLACEHOLDER}
-          className="flex-1 resize-none rounded-control border border-border px-3 py-2 text-sm text-ink focus:border-primary focus:outline-none"
+          className="h-16 flex-1 resize-none rounded-control border border-border px-3 py-2 text-sm text-ink focus:border-primary focus:outline-none"
         />
         <button
           type="button"
           onClick={handleSend}
           disabled={isSending || !input.trim()}
-          className="rounded-control bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-16 shrink-0 rounded-control bg-primary px-5 text-sm font-medium text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
         >
           전송
         </button>
       </div>
+    </div>
+  );
+
+  const quickCommandChips = (
+    <div className="mb-3 flex flex-wrap justify-center gap-2">
+      {SLASH_COMMANDS.map((command) => (
+        <button
+          key={command.command}
+          type="button"
+          onClick={() => handleSelectSlashCommand(command)}
+          className="flex items-center gap-1.5 rounded-pill border border-border bg-surface px-3 py-1.5 text-xs hover:bg-page-bg"
+        >
+          <span className="font-mono font-medium text-primary">{command.label}</span>
+          <span className="text-subtle">{command.description}</span>
+        </button>
+      ))}
     </div>
   );
 
@@ -211,7 +230,10 @@ export default function ChatWindow() {
       {display.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center px-6">
           <div className="w-full max-w-2xl">
-            <h1 className="mb-6 text-center text-2xl font-semibold text-ink">정책 Agent</h1>
+            <h1 className="mb-6 text-center text-2xl font-semibold text-ink">
+              안녕하세요, {userName}님 👋
+            </h1>
+            {quickCommandChips}
             {composer}
           </div>
         </div>

@@ -18,8 +18,8 @@ export default {
         "page-bg": "#F8F9FA",
         surface: "#FFFFFF",
         primary: {
-          DEFAULT: "#2563EB",
-          hover: "#1D4FC4",
+          DEFAULT: "#D85A30",
+          hover: "#C14E27",
         },
         ink: "#111827",
         subtle: "#6B7280",

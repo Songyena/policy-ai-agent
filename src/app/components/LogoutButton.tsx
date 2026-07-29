@@ -18,7 +18,7 @@ export default function LogoutButton() {
     <button
       onClick={handleLogout}
       disabled={isLoggingOut}
-      className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed"
+      className="w-full rounded-control px-3 py-2 text-left text-sm font-medium text-subtle transition-colors hover:bg-page-bg hover:text-ink disabled:cursor-not-allowed"
     >
       {isLoggingOut ? "로그아웃 중..." : "로그아웃"}
     </button>
