@@ -1,19 +1,20 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+
 export const metadata: Metadata = {
-  title: "정책 싱크 · 영향도 분석 에이전트",
-  description: "엑셀/피그마 정책 문서를 파싱하고 검수하여 지식창고에 적재하는 대시보드",
+  title: "크레디뷰 정책 Agent",
+  description: "단일 대화창에서 정책/용어/이용약관을 조회·등록·엑셀 일괄 검증하는 AI 에이전트",
 };
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ko">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
-        {children}
-      </body>
+    <html lang="ko" className={inter.variable}>
+      <body className="min-h-screen bg-page-bg text-ink antialiased">{children}</body>
     </html>
   );
 }

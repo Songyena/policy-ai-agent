@@ -1,57 +1,47 @@
 import { z } from "zod";
 
 /**
- * 1단계 (parser) 산출물 — 엑셀/피그마에서 그대로 추출한 원본 조각.
- * 정제 판단 없이 "어디서 왔는지"와 "원문"만 담는다.
+ * 정책(Policies) 고정 스키마. 엑셀 '정책' 시트 컬럼과 1:1 대응한다.
+ * author/updatedAt은 사용자가 직접 입력하지 않고 로그인 사용자/등록(수정) 시각으로 서버가 채운다.
  */
-export const RawPolicySourceSchema = z.object({
-  id: z.string(),
-  sourceType: z.enum(["excel", "figma"]),
-  sourceRef: z.string(), // 파일 경로, 시트명, Figma 노드 ID 등
-  rawText: z.string(),
-  /** 파일명/시트명을 카테고리에 매핑해 얻은 힌트. 최종 category 확정은 refine 단계의 AI가 담당한다. */
-  categoryHint: z.string().optional(),
-  extractedAt: z.string(), // ISO 8601
+export const PolicyFieldsSchema = z.object({
+  category: z.string().min(1), // 구분 (예: 채번규칙, 결제정책, 시스템연동 등)
+  policyName: z.string().min(1), // 정책명
+  subItem: z.string().default(""), // 세부항목 (예: 신용평가등급확인서, AI경영진단 등)
+  ruleDesc: z.string().min(1), // 설명1: 규칙/포맷 공식
+  detailDesc: z.string().default(""), // 설명2: 상세 설명
+  example: z.string().min(1), // 예시 (예: CV2411120001)
+  author: z.string().min(1), // 작성/수정자
+  updatedAt: z.string().min(1), // 작성/수정일 (ISO 8601)
 });
-export type RawPolicySource = z.infer<typeof RawPolicySourceSchema>;
+export type PolicyFields = z.infer<typeof PolicyFieldsSchema>;
 
-/**
- * 2단계 (refine) 산출물 — AI가 생성한 "정리된 정책 데이터 후보".
- * status가 "approved"가 되기 전까지는 지식창고(db)에 들어가지 않는다.
- */
-export const PolicyCandidateSchema = z.object({
+/** 대화형 등록에서 사용자가 아직 채우지 못한 필드를 허용하는 초안(draft) 형태. */
+export const PolicyDraftFieldsSchema = PolicyFieldsSchema.partial();
+export type PolicyDraftFields = z.infer<typeof PolicyDraftFieldsSchema>;
+
+/** 등록/조회 화면에서 필수로 취급하는 필드. author/updatedAt은 서버가 채우므로 제외한다. */
+export const POLICY_REQUIRED_FIELDS = [
+  "category",
+  "policyName",
+  "ruleDesc",
+  "example",
+] as const satisfies readonly (keyof PolicyFields)[];
+
+export const PolicyRecordSchema = PolicyFieldsSchema.extend({
   id: z.string(),
-  sourceIds: z.array(z.string()),
-  title: z.string(),
-  description: z.string(),
-  category: z.string(),
-  keywords: z.array(z.string()),
-  status: z.enum(["pending", "approved", "rejected"]),
-  confidence: z.number().min(0).max(1),
-  createdAt: z.string(),
-});
-export type PolicyCandidate = z.infer<typeof PolicyCandidateSchema>;
-
-/** candidateGenerator가 Claude로부터 구조화된 출력으로 받는 원시 형태 (승인 전이므로 status/id 없음) */
-export const PolicyCandidateDraftSchema = z.object({
-  title: z.string(),
-  description: z.string(),
-  category: z.string(),
-  keywords: z.array(z.string()),
-  confidence: z.number().min(0).max(1),
-});
-export type PolicyCandidateDraft = z.infer<typeof PolicyCandidateDraftSchema>;
-
-/**
- * 3단계 (db) — 사용자가 승인한 최종 정책. 채팅/영향도 분석은 이 타입만 참조한다.
- */
-export const PolicyRecordSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  description: z.string(),
-  category: z.string(),
-  keywords: z.array(z.string()),
-  sourceIds: z.array(z.string()),
-  confirmedAt: z.string(),
+  revision: z.number(),
+  history: z.array(PolicyFieldsSchema),
 });
 export type PolicyRecord = z.infer<typeof PolicyRecordSchema>;
+
+export const POLICY_FIELD_LABELS: Record<keyof PolicyFields, string> = {
+  category: "구분",
+  policyName: "정책명",
+  subItem: "세부항목",
+  ruleDesc: "설명1(규칙/포맷)",
+  detailDesc: "설명2(상세설명)",
+  example: "예시",
+  author: "작성/수정자",
+  updatedAt: "작성/수정일",
+};

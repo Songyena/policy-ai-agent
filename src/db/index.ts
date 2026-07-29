@@ -1,8 +1,12 @@
-export { initDb } from "./knowledgeStore";
+export { policyStore } from "./policyStore";
+export { termStore } from "./termStore";
+export { termsConditionsStore } from "./termsConditionsStore";
 export {
-  commitApprovedCandidate,
-  getPolicyById,
-  getAllPolicies,
-  searchPolicies,
-  findPoliciesByKeywords,
-} from "./knowledgeStore";
+  registerPolicy,
+  registerTerm,
+  registerTermsConditions,
+  initAllStores,
+  type RegisterResult,
+} from "./registry";
+export { logActivity, getActivityLog } from "./activityLog";
+export type { StoredRecord } from "./recordStore";

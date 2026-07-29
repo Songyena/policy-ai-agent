@@ -14,4 +14,7 @@ data/knowledge/*
 !data/staging/.gitkeep
 !data/knowledge/.gitkeep
 
+# 계정 정보(비밀번호 해시/솔트 포함) — 커밋하지 않음
+data/users.json
+
 .DS_Store

@@ -1,1 +1,43 @@
 @import "tailwindcss";
+
+/*
+ * 디자인 토큰 (B2B SaaS 대시보드 룩앤필).
+ * Tailwind v4는 CSS-first 설정을 쓰므로 여기 @theme가 실제 소스이며,
+ * 프로젝트 루트의 tailwind.config.js는 동일 토큰의 참고용 미러(mirror)다.
+ * 자세한 사용 가이드는 /style-guide.md 참고.
+ */
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* Backgrounds */
+  --color-page-bg: #f8f9fa;
+  --color-surface: #ffffff;
+
+  /* Primary */
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4fc4;
+
+  /* Text */
+  --color-ink: #111827; /* Text Primary */
+  --color-subtle: #6b7280; /* Text Secondary */
+
+  /* Borders */
+  --color-border: #e5e7eb;
+  --color-border-subtle: #eef0f4;
+
+  /* Status badges (soft pastel bg + strong text) */
+  --color-success-bg: #ecfdf5;
+  --color-success: #047857;
+  --color-danger-bg: #fef2f2;
+  --color-danger: #dc2626;
+  --color-warning-bg: #fef3c7;
+  --color-warning: #d97706;
+
+  /* Radius */
+  --radius-card: 1rem; /* 16px — 카드/패널/드로어 */
+  --radius-control: 0.625rem; /* 10px — 버튼/인풋 */
+  --radius-pill: 999px; /* 뱃지 */
+
+  /* Shadow — 과도한 그림자 대신 아주 미세한 elevation만 사용 */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.05);
+}

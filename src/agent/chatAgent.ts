@@ -1,49 +1,106 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { env } from "../config/env";
-import { getAllPolicies, searchPolicies } from "../db/knowledgeStore";
-import type { PolicyRecord } from "../types/policy";
+import { executeTool, TOOL_DEFINITIONS } from "./tools";
 
-const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
-const SYSTEM_PROMPT = `당신은 사내 정책 지식창고를 안내하는 어시스턴트입니다.
-아래에 주어진 "지식창고 정책 목록"에 있는 내용만 근거로 답변하세요.
-목록에 없는 내용은 추측하지 말고, 근거가 없으면 "현재 지식창고에서 해당 내용을 찾을 수 없습니다"라고 답하세요.
-답변할 때는 근거가 된 정책의 제목을 함께 언급하세요.`;
+const MAX_TOOL_ITERATIONS = 6;
 
-function formatPolicyContext(policies: PolicyRecord[]): string {
-  if (policies.length === 0) return "(관련된 정책을 찾지 못했습니다)";
-  return policies
-    .map(
-      (p) =>
-        `- [${p.title}] (분류: ${p.category}, 키워드: ${p.keywords.join(", ")})\n  ${p.description}`,
-    )
-    .join("\n");
+const SYSTEM_PROMPT = `당신은 사내 정책/용어(표준 용어집)/이용약관을 통합 관리하는 단일 대화창 어시스턴트입니다.
+
+역할:
+1. 조회: 사용자가 정책/용어/약관에 대해 물으면 반드시 search_knowledge 도구로 먼저 검색하고, 그 결과에 있는 내용만 근거로 답합니다. 검색 결과에 없으면 "현재 지식창고에서 해당 내용을 찾을 수 없습니다"라고 답하세요. 절대 추측하지 마세요.
+2. 대화형 등록: 사용자가 정책/용어/약관을 새로 등록하려고 하면, 대화로 필요한 항목을 채웁니다.
+   - 정책: 구분, 정책명, 세부항목, 설명1(규칙/포맷), 설명2(상세설명), 예시
+   - 용어: 표준 용어, 유사어(여러 개 가능), 노출 메뉴, 개념(정의), 비고
+   - 이용약관: 사용여부, 필수여부, 기기구분, 약관명, 파일명, 관리코드, 개정일자
+   사용자가 정보를 말할 때마다 지금까지 파악한 값을 모두 포함해서 해당 draft_* 도구를 호출하세요.
+   도구가 돌려준 missingFields에 있는 항목만 사용자에게 물어보세요(이미 채워진 항목은 다시 묻지 마세요).
+   missingFields가 없어지면(모두 채워지면) 지금까지 파악한 내용을 한국어로 간단히 요약하고
+   "아래 내용으로 등록할까요?"라고 물어보세요 — 실제 등록은 화면의 확인 카드에서 사용자가 직접
+   버튼을 눌러야 이뤄지므로, 당신이 등록을 완료했다고 말하지 마세요.
+3. 사용자가 "/정책", "/용어", "/약관" 같은 슬래시 커맨드로 말을 시작하면 해당 종류의 등록/조회 의도로
+   우선 해석하세요. "/엑셀"이나 "/파싱"은 파일 업로드로 별도 처리되므로 당신이 처리할 필요는 없습니다.
+
+항상 한국어로, 간결하고 실무적인 어투로 답하세요.`;
+
+export interface AgentTurnResult {
+  reply: string;
+  card?: { type: "policy" | "term" | "termsConditions"; fields: Record<string, unknown> };
+  /**
+   * 이번 턴에 새로 생성된 메시지(assistant의 tool_calls 포함 메시지, tool 결과, 최종 답변).
+   * 서버가 세션을 저장하지 않으므로, 프론트엔드가 이 메시지들을 자신의 history 배열 뒤에 이어붙여
+   * 다음 요청 때 그대로 다시 보내야 대화 맥락(예: 지금까지 채운 등록 필드)이 유지된다.
+   */
+  appendedMessages: ChatCompletionMessageParam[];
 }
 
 /**
- * 채팅형 지식창고: 사용자의 자연어 질문에 대해 db(승인된 정책만 보유)에서
- * 관련 정책을 검색한 뒤, 그 내용만 근거로 답변을 생성한다.
+ * 프론트엔드가 보관하는 전체 대화 이력(messages)을 받아 tool calling 루프를 한 번 돈다.
+ * 서버는 세션 상태를 따로 저장하지 않는다 — 매 요청마다 클라이언트가 보내는 이력이 유일한 상태다.
  */
-export async function askPolicyQuestion(question: string): Promise<string> {
-  const directHits = searchPolicies(question);
+export async function runChatTurn(
+  history: ChatCompletionMessageParam[],
+  modeHint?: string,
+): Promise<AgentTurnResult> {
+  const messages: ChatCompletionMessageParam[] = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...(modeHint ? [{ role: "system" as const, content: modeHint }] : []),
+    ...history,
+  ];
+  const appendedMessages: ChatCompletionMessageParam[] = [];
 
-  // 검색어로 못 찾은 경우, 전체 정책이 많지 않다면 전체를 컨텍스트로 준다 (MVP 수준의 폴백).
-  const allPolicies = getAllPolicies();
-  const contextPolicies =
-    directHits.length > 0 ? directHits : allPolicies.slice(0, 20);
+  let card: AgentTurnResult["card"];
 
-  const response = await client.messages.create({
-    model: "claude-opus-4-8",
-    max_tokens: 4096,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: `지식창고 정책 목록:\n${formatPolicyContext(contextPolicies)}\n\n질문: ${question}`,
-      },
-    ],
-  });
+  for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+    const response = await client.chat.completions.create({
+      model: "gpt-5.5",
+      max_completion_tokens: 4096,
+      // gpt-5.5는 /v1/chat/completions에서 function tools와 reasoning_effort를 함께 쓸 수 없다
+      // ("Function tools with reasoning_effort are not supported ... set reasoning_effort to 'none'").
+      reasoning_effort: "none",
+      messages,
+      tools: TOOL_DEFINITIONS,
+      tool_choice: "auto",
+    });
 
-  const textBlock = response.content.find((block) => block.type === "text");
-  return textBlock?.text ?? "";
+    const message = response.choices[0]?.message;
+    if (!message) throw new Error("에이전트 응답을 받지 못했습니다.");
+
+    if (!message.tool_calls || message.tool_calls.length === 0) {
+      appendedMessages.push(message);
+      return { reply: message.content ?? "", card, appendedMessages };
+    }
+
+    messages.push(message);
+    appendedMessages.push(message);
+
+    for (const toolCall of message.tool_calls) {
+      if (toolCall.type !== "function") continue;
+      let args: Record<string, unknown> = {};
+      try {
+        args = JSON.parse(toolCall.function.arguments || "{}");
+      } catch {
+        args = {};
+      }
+
+      const { output, card: toolCard } = executeTool(toolCall.function.name, args);
+      if (toolCard) card = toolCard;
+
+      const toolMessage: ChatCompletionMessageParam = {
+        role: "tool",
+        tool_call_id: toolCall.id,
+        content: JSON.stringify(output),
+      };
+      messages.push(toolMessage);
+      appendedMessages.push(toolMessage);
+    }
+  }
+
+  return {
+    reply: "요청을 처리하는 데 예상보다 많은 단계가 필요했습니다. 다시 한 번 말씀해 주시겠어요?",
+    card,
+    appendedMessages,
+  };
 }
