@@ -108,6 +108,30 @@ npm run migrate:legacy
 공개 URL이 즉시 발급됩니다. 커스텀 도메인을 쓰려면 같은 화면의 **Custom Domain**에서 도메인을
 추가하고 안내되는 CNAME 레코드를 DNS에 등록하면 됩니다.
 
+### 트러블슈팅: "Application failed to respond" / 502 + connection refused
+
+컨테이너 로그에는 `✓ Ready`가 정상적으로 찍히고 서비스 상태도 `Online`인데 공개 URL에 접속하면
+502(`Application failed to respond`)가 뜬다면, **도메인의 Target Port가 앱이 실제로 리스닝하는
+포트와 다른 경우**일 가능성이 높다 — 실제로 이 프로젝트에서 겪은 원인이다. Railway가 도메인을
+처음 생성할 때 포트를 3000으로 추정해 넣어두는데, `next start`는 Railway가 그때그때 주입하는
+`PORT` 환경변수를 그대로 따라가므로(예: 8080) 서로 어긋날 수 있다. 컨테이너/앱은 멀쩡히 떠 있고
+Railway 프록시만 엉뚱한 포트로 연결을 시도하다 거부당하는 상황이라, 앱 로그에는 아무 에러도
+남지 않는다.
+
+확인 및 수정:
+
+```bash
+railway status --json   # domains[].targetPort 값을 확인
+```
+
+배포 로그에 찍힌 실제 리스닝 포트(`- Local: http://localhost:XXXX`)와 다르면:
+
+```bash
+railway domain update <발급된 도메인> --port <배포 로그에 찍힌 실제 포트>
+```
+
+또는 대시보드 **Settings → Networking**에서 도메인 옆의 포트 값을 직접 수정해도 된다.
+
 ## 데이터 스키마
 
 | 정책 (Policies) | 용어 (Terms) | 이용약관 (Terms & Conditions) |
