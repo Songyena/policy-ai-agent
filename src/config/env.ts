@@ -2,7 +2,7 @@ import "dotenv/config";
 import { z } from "zod";
 
 const envSchema = z.object({
-  OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY가 필요합니다."),
+  GEMINI_API_KEY: z.string().min(1, "GEMINI_API_KEY가 필요합니다."),
   RAW_DATA_DIR: z.string().default("./data/raw"),
   POLICIES_DATA_PATH: z.string().default("./data/knowledge/policies.json"),
   TERMS_DATA_PATH: z.string().default("./data/knowledge/terms.json"),

@@ -3,7 +3,13 @@ import type { ChatCompletionMessageParam } from "openai/resources/chat/completio
 import { env } from "../config/env";
 import { executeTool, TOOL_DEFINITIONS } from "./tools";
 
-const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+// Gemini의 OpenAI 호환 엔드포인트를 그대로 openai SDK로 호출한다 (baseURL/모델명만 다르다).
+// https://ai.google.dev/gemini-api/docs/openai
+const client = new OpenAI({
+  apiKey: env.GEMINI_API_KEY,
+  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+});
+const MODEL = "gemini-3.1-flash-lite";
 
 const MAX_TOOL_ITERATIONS = 6;
 
@@ -57,11 +63,8 @@ export async function runChatTurn(
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     const response = await client.chat.completions.create({
-      model: "gpt-5.5",
-      max_completion_tokens: 4096,
-      // gpt-5.5는 /v1/chat/completions에서 function tools와 reasoning_effort를 함께 쓸 수 없다
-      // ("Function tools with reasoning_effort are not supported ... set reasoning_effort to 'none'").
-      reasoning_effort: "none",
+      model: MODEL,
+      max_tokens: 4096,
       messages,
       tools: TOOL_DEFINITIONS,
       tool_choice: "auto",

@@ -59,17 +59,20 @@ Vector DB 없이 `recordStore.search()`가 질의를 공백 기준 토큰으로 
 
 ### LLM 에이전트: tool calling 기반 대화형 폼 채우기 (세션 상태 없음)
 
-`src/agent/`는 OpenAI `gpt-5.5`를 tool calling으로 호출한다. 서버는 세션을 저장하지 않고,
+`src/agent/`는 Google Gemini(`gemini-3.1-flash-lite`)를 tool calling으로 호출한다. `openai`
+npm 패키지를 그대로 쓰되, Gemini의 OpenAI 호환 엔드포인트
+(`https://generativelanguage.googleapis.com/v1beta/openai/`)로 `baseURL`만 바꿔서 붙인다
+(https://ai.google.dev/gemini-api/docs/openai) — 메시지/도구 스키마 형식이 OpenAI와 동일해서
+`tools.ts`의 `ChatCompletionTool` 등 타입을 그대로 재사용할 수 있다. 서버는 세션을 저장하지 않고,
 프론트엔드가 들고 있는 전체 대화 이력(`messages`)을 매 요청마다 그대로 보낸다 —
 `runChatTurn()`이 이번 턴에 새로 생긴 메시지(tool_calls 포함 assistant 메시지, tool 결과,
 최종 답변)를 `appendedMessages`로 돌려주면 프론트엔드가 그걸 자기 history 뒤에 이어붙여
 다음 요청 때 다시 보낸다. 이렇게 해야 "지금까지 파악한 등록 필드"가 여러 턴에 걸쳐 유지된다.
 
-- **주의**: `gpt-5.5`(추론형 모델)는 `/v1/chat/completions`에서 function tools와
-  `reasoning_effort`를 함께 쓸 수 없다("Function tools with reasoning_effort are not
-  supported ... set reasoning_effort to 'none'"). tools를 넘기는 호출은 반드시
-  `reasoning_effort: "none"`을 쓴다. (tools 없이 순수 텍스트 생성만 하는 호출이라면 이전처럼
-  `"low"` 등을 쓸 수 있다.)
+- **주의**: OpenAI 전용 파라미터(`reasoning_effort`, `max_completion_tokens` 등)는 Gemini
+  호환 레이어에서 조용히 무시되거나 다른 파라미터와 충돌할 수 있으므로 쓰지 않는다 — 대신
+  범용적으로 지원되는 `max_tokens`를 쓴다. 모델을 다시 OpenAI 등으로 바꿀 일이 있으면 이
+  차이를 다시 확인한다.
 - `draft_policy`/`draft_term`/`draft_terms_conditions` 툴은 **DB에 아무것도 쓰지 않는다.**
   지금까지 파악한 필드를 검증해 `missingFields`(누락된 필수 항목의 한국어 라벨)와
   `status: "ready"|"incomplete"`만 돌려준다. `status: "ready"`가 되면 서버가 그 결과를
@@ -144,9 +147,9 @@ AI 정제(`refine`) + 검수 대기(`staging`) 2단계 파이프라인은 없앴
   쓴다 — 인덱스 접근 결과는 항상 `T | undefined`로 취급하고 `??`로 기본값을 준다.
 - **환경변수**: 모든 외부 연동 키/경로는 `.env`에 두고 `src/config/env.ts`를 통해서만 읽는다.
   새 데이터 경로나 외부 연동을 추가하면 `.env.example`과 `env.ts`의 zod 스키마를 함께 갱신한다.
-- **OpenAI API 사용**: 모델은 `gpt-5.5`. tool calling을 쓰는 호출은 `reasoning_effort: "none"`
-  (위 "LLM 에이전트" 절 참고). 구조화된 출력이 필요한 다른 곳에서는 기존처럼
-  `client.chat.completions.parse` + `zodResponseFormat`을 쓸 수 있다.
+- **LLM API 사용**: 모델은 Gemini `gemini-3.1-flash-lite`(무료 티어), `openai` SDK + Gemini
+  OpenAI 호환 `baseURL`로 호출한다(위 "LLM 에이전트" 절 참고). OpenAI 전용 파라미터를 새로
+  추가하지 않는다.
 - **등록은 반드시 사용자 확인을 거친다**: 대화형 등록이든 엑셀 업로드든, 사용자가 확인
   카드/검증 모달에서 명시적으로 확정(등록 버튼 클릭)하기 전에 서버가 먼저 스토어에 커밋하는
   코드를 추가하지 않는다.
@@ -160,7 +163,7 @@ AI 정제(`refine`) + 검수 대기(`staging`) 2단계 파이프라인은 없앴
 
 ```bash
 npm install
-cp .env.example .env   # 키 채워넣기 (OPENAI_API_KEY, SESSION_SECRET 등)
+cp .env.example .env   # 키 채워넣기 (GEMINI_API_KEY, SESSION_SECRET 등)
 
 npm run dev             # Next.js 개발 서버 — 최초 접속 시 /signup에서 회원가입 필요
 npm run build && npm start

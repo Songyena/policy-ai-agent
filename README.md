@@ -23,7 +23,8 @@
 ## 기술 스택
 
 - **Framework**: Next.js 16 (App Router, TypeScript), Tailwind CSS v4
-- **LLM**: OpenAI `gpt-5.5` (function/tool calling)
+- **LLM**: Google Gemini(`gemini-3.1-flash-lite`), `openai` SDK를 Gemini의 OpenAI 호환
+  엔드포인트로 그대로 사용 (function/tool calling)
 - **엑셀 파싱**: `xlsx`(SheetJS) — 병합 셀·다단 헤더 자동 감지
 - **데이터 저장**: JSON 파일 기반 지식창고 (`data/knowledge/*.json`) — 정책/용어/이용약관 각각 독립 파일
 - **인증**: 아이디/비밀번호 + 서명된 세션 쿠키 (scrypt 해시)
@@ -32,7 +33,7 @@
 
 ```bash
 npm install
-cp .env.example .env   # OPENAI_API_KEY, SESSION_SECRET 채워넣기
+cp .env.example .env   # GEMINI_API_KEY(https://aistudio.google.com/apikey), SESSION_SECRET 채워넣기
 
 npm run dev             # http://localhost:3000
 npm run typecheck
@@ -87,7 +88,7 @@ npm run migrate:legacy
 
 | 변수 | 필수 여부 | 설명 |
 |---|---|---|
-| `OPENAI_API_KEY` | 필수 | 대화형 에이전트(tool calling)가 사용하는 OpenAI API 키 |
+| `GEMINI_API_KEY` | 필수 | 대화형 에이전트(tool calling)가 사용하는 Google Gemini API 키 |
 | `SESSION_SECRET` | 필수 | 로그인 세션 쿠키 서명에 쓰는 임의의 긴 무작위 문자열 |
 | `RAW_DATA_DIR`, `POLICIES_DATA_PATH`, `TERMS_DATA_PATH`, `TERMS_CONDITIONS_DATA_PATH`, `ACTIVITY_LOG_PATH`, `USERS_DATA_PATH` | 선택 | 기본값이 전부 `./data/...` 아래이므로, 볼륨을 `/app/data`에 붙였다면 따로 설정할 필요 없음 |
 
