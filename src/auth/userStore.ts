@@ -5,11 +5,17 @@ import { env } from "../config/env";
 import type { User } from "../types/user";
 
 function ensureUsersFile(): void {
-  if (!existsSync(dirname(env.USERS_DATA_PATH))) {
-    mkdirSync(dirname(env.USERS_DATA_PATH), { recursive: true });
-  }
-  if (!existsSync(env.USERS_DATA_PATH)) {
-    writeFileSync(env.USERS_DATA_PATH, "[]", "utf-8");
+  try {
+    if (!existsSync(dirname(env.USERS_DATA_PATH))) {
+      mkdirSync(dirname(env.USERS_DATA_PATH), { recursive: true });
+    }
+    if (!existsSync(env.USERS_DATA_PATH)) {
+      writeFileSync(env.USERS_DATA_PATH, "[]", "utf-8");
+    }
+  } catch (error) {
+    // 여기서 실패해도 조용히 넘어간다 - 뒤이어 실행되는 실제 읽기/쓰기(readFileSync/writeFileSync)가
+    // 같은 문제로 다시 실패하면 그 호출자(로그인/회원가입 라우트 등)에게 정상적으로 에러가 전달된다.
+    console.error(`[userStore] ${env.USERS_DATA_PATH} 준비 실패`, error);
   }
 }
 

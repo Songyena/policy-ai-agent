@@ -38,25 +38,26 @@ export function createRecordStore<TFields extends Record<string, unknown>>(
   /**
    * 파일이 없으면(빈 볼륨을 새로 마운트한 첫 배포 등) 빈 상태로 새로 만든다.
    * 파일은 있지만 내용이 손상되어 JSON 파싱이 실패하는 경우(이전 프로세스가 쓰기 도중 죽은 경우
-   * 등)에도 크래시 대신 빈 상태로 되돌린다 — 필드 하나 읽으려다 서버 전체가 죽는 것보다는
-   * 데이터를 잃더라도 서비스가 뜨는 편이 낫다.
+   * 등)나, 디렉터리 생성/쓰기 자체가 권한 문제로 실패하는 경우에도 크래시 대신 빈 상태(메모리에만
+   * 존재, 지속은 안 됨)로 되돌린다 — 필드 하나 읽으려다 요청 전체(나아가 서버 전체)가 죽는 것보다는
+   * 데이터를 잃더라도 서비스가 응답하는 편이 낫다.
    */
   function load(): StoreShape<TFields> {
     if (cache) return cache;
-    mkdirSync(dirname(filePath), { recursive: true });
-    if (!existsSync(filePath)) {
+    try {
+      mkdirSync(dirname(filePath), { recursive: true });
+      if (!existsSync(filePath)) {
+        cache = { version: 1, items: [] };
+        writeFileSync(filePath, JSON.stringify(cache, null, 2), "utf-8");
+        return cache;
+      }
+      cache = JSON.parse(readFileSync(filePath, "utf-8")) as StoreShape<TFields>;
+      return cache;
+    } catch (error) {
+      console.error(`[recordStore] ${filePath} 초기화 실패 - 빈 상태로 계속 진행합니다.`, error);
       cache = { version: 1, items: [] };
-      writeFileSync(filePath, JSON.stringify(cache, null, 2), "utf-8");
       return cache;
     }
-    try {
-      cache = JSON.parse(readFileSync(filePath, "utf-8")) as StoreShape<TFields>;
-    } catch (error) {
-      console.error(`[recordStore] ${filePath} 파싱 실패 - 빈 상태로 재초기화합니다.`, error);
-      cache = { version: 1, items: [] };
-      writeFileSync(filePath, JSON.stringify(cache, null, 2), "utf-8");
-    }
-    return cache;
   }
 
   function persist(store: StoreShape<TFields>): void {

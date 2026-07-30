@@ -15,4 +15,19 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-export const env: Env = envSchema.parse(process.env);
+/**
+ * 필수 환경변수가 없으면 앱이 정상 동작할 수 없으므로 여전히 예외를 던진다 — 다만 이 모듈은
+ * 거의 모든 요청 경로에서 트랜지티브하게 import되므로, 어떤 값이 왜 빠졌는지 로그에 명확히
+ * 남겨야 (Railway 등에서) 매 요청마다 같은 원인 불명 에러가 반복되는 상황을 바로 진단할 수 있다.
+ */
+function loadEnv(): Env {
+  const result = envSchema.safeParse(process.env);
+  if (!result.success) {
+    const details = result.error.issues.map((issue) => `${issue.path.join(".")} (${issue.message})`).join(", ");
+    console.error(`[env] 환경변수 검증 실패: ${details}`);
+    throw new Error(`환경변수 검증 실패: ${details}`);
+  }
+  return result.data;
+}
+
+export const env: Env = loadEnv();

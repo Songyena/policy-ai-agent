@@ -18,15 +18,20 @@ export async function register() {
     console.error("[uncaughtException]", error);
   });
 
-  const { initAllStores } = await import("./db/index");
-  const { initUsersStore } = await import("./auth/userStore");
-
+  // 아래 동적 import 자체가 실패할 수 있다(예: OPENAI_API_KEY/SESSION_SECRET이 없으면
+  // "@/config/env"가 모듈 평가 시점에 바로 예외를 던지고, db/index → env로 이어지는 이
+  // import 체인이 그 예외를 그대로 전파한다). 이 실패를 try 밖에 두면 Next.js가
+  // "Failed to prepare server"로 처리하면서 그 이후 모든 요청이 계속 실패하게 되므로,
+  // import 문 자체까지 통째로 감싼다.
   try {
+    const { initAllStores } = await import("./db/index");
+    const { initUsersStore } = await import("./auth/userStore");
     initAllStores();
     initUsersStore();
   } catch (error) {
     console.error(
-      "[instrumentation] 데이터 저장소 초기화 실패 - data/ 경로 쓰기 권한이나 볼륨 마운트 설정을 확인하세요.",
+      "[instrumentation] 초기화 실패 - OPENAI_API_KEY/SESSION_SECRET 환경변수가 설정되어 있는지, " +
+        "data/ 경로 쓰기 권한이나 볼륨 마운트 설정이 올바른지 확인하세요.",
       error,
     );
   }
