@@ -2,6 +2,7 @@ import type { PolicyFields, PolicyRecord } from "../types/policy";
 import type { TermFields, TermRecord } from "../types/term";
 import type { TermsConditionsFields, TermsConditionsRecord } from "../types/termsConditions";
 import { initActivityLog, logActivity } from "./activityLog";
+import { toFields } from "./recordStore";
 import { policyStore } from "./policyStore";
 import { termStore } from "./termStore";
 import { termsConditionsStore } from "./termsConditionsStore";
@@ -22,6 +23,8 @@ export function registerPolicy(fields: PolicyFields, actor: string): RegisterRes
     label: record.policyName,
     actor,
     at: record.updatedAt,
+    snapshot: toFields(record),
+    previousSnapshot: wasRevision ? record.history[record.history.length - 1] : undefined,
   });
   return { record, wasRevision };
 }
@@ -36,6 +39,8 @@ export function registerTerm(fields: TermFields, actor: string): RegisterResult<
     label: record.standardTerm,
     actor,
     at: record.updatedAt,
+    snapshot: toFields(record),
+    previousSnapshot: wasRevision ? record.history[record.history.length - 1] : undefined,
   });
   return { record, wasRevision };
 }
@@ -53,8 +58,61 @@ export function registerTermsConditions(
     label: record.termsName,
     actor,
     at: record.updatedAt,
+    snapshot: toFields(record),
+    previousSnapshot: wasRevision ? record.history[record.history.length - 1] : undefined,
   });
   return { record, wasRevision };
+}
+
+/** 정책을 삭제하고, 삭제 당시 필드 스냅샷을 포함한 활동 로그를 남긴다. */
+export function deletePolicy(id: string, actor: string): PolicyRecord | undefined {
+  const removed = policyStore.remove(id);
+  if (!removed) return undefined;
+  const at = new Date().toISOString();
+  logActivity({
+    entityType: "policy",
+    entityId: removed.id,
+    action: "deleted",
+    label: removed.policyName,
+    actor,
+    at,
+    snapshot: toFields(removed),
+  });
+  return removed;
+}
+
+/** 용어를 삭제하고, 삭제 당시 필드 스냅샷을 포함한 활동 로그를 남긴다. */
+export function deleteTerm(id: string, actor: string): TermRecord | undefined {
+  const removed = termStore.remove(id);
+  if (!removed) return undefined;
+  const at = new Date().toISOString();
+  logActivity({
+    entityType: "term",
+    entityId: removed.id,
+    action: "deleted",
+    label: removed.standardTerm,
+    actor,
+    at,
+    snapshot: toFields(removed),
+  });
+  return removed;
+}
+
+/** 이용약관 항목을 삭제하고, 삭제 당시 필드 스냅샷을 포함한 활동 로그를 남긴다. */
+export function deleteTermsConditions(id: string, actor: string): TermsConditionsRecord | undefined {
+  const removed = termsConditionsStore.remove(id);
+  if (!removed) return undefined;
+  const at = new Date().toISOString();
+  logActivity({
+    entityType: "termsConditions",
+    entityId: removed.id,
+    action: "deleted",
+    label: removed.termsName,
+    actor,
+    at,
+    snapshot: toFields(removed),
+  });
+  return removed;
 }
 
 export function initAllStores(): void {

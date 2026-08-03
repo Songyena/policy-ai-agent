@@ -1,12 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { POLICY_FIELD_LABELS } from "@/types/policy";
+import { TERM_FIELD_LABELS } from "@/types/term";
+import { TERMS_CONDITIONS_FIELD_LABELS } from "@/types/termsConditions";
 import type { EntityType } from "../chat/types";
+
+type ViewTab = EntityType | "activity";
 
 const ENTITY_LABEL: Record<EntityType, string> = {
   policy: "정책",
   term: "용어",
   termsConditions: "이용약관",
+};
+
+const TAB_LABEL: Record<ViewTab, string> = {
+  ...ENTITY_LABEL,
+  activity: "변경 이력",
 };
 
 const ENTITY_ENDPOINT: Record<EntityType, string> = {
@@ -15,7 +25,20 @@ const ENTITY_ENDPOINT: Record<EntityType, string> = {
   termsConditions: "/api/terms-conditions",
 };
 
-const TABS: EntityType[] = ["policy", "term", "termsConditions"];
+const FIELD_LABELS: Record<EntityType, Record<string, string>> = {
+  policy: POLICY_FIELD_LABELS as Record<string, string>,
+  term: TERM_FIELD_LABELS as Record<string, string>,
+  termsConditions: TERMS_CONDITIONS_FIELD_LABELS as Record<string, string>,
+};
+
+const TABS: ViewTab[] = ["policy", "term", "termsConditions", "activity"];
+
+const ACTION_LABEL: Record<string, string> = { created: "등록", revised: "수정", deleted: "삭제" };
+const ACTION_BADGE: Record<string, string> = {
+  created: "bg-success-bg text-success",
+  revised: "bg-warning-bg text-warning",
+  deleted: "bg-danger-bg text-danger",
+};
 
 // 카테고리/기기구분 문자열을 안정적으로 팔레트에 매핑해 같은 값은 항상 같은 색으로 보이게 한다.
 const BADGE_PALETTE = [
@@ -100,6 +123,18 @@ function toRowView(type: EntityType, item: Record<string, unknown>): RowView {
   };
 }
 
+interface ActivityEntry {
+  id: string;
+  entityType: EntityType;
+  entityId: string;
+  action: "created" | "revised" | "deleted";
+  label: string;
+  actor: string;
+  at: string;
+  snapshot?: Record<string, unknown>;
+  previousSnapshot?: Record<string, unknown>;
+}
+
 function SearchIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -117,30 +152,77 @@ function ChevronDownIcon({ className }: { className?: string }) {
   );
 }
 
+function formatDateTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("ko-KR");
+  } catch {
+    return iso;
+  }
+}
+
+function renderSnapshotLines(entityType: EntityType, snapshot: Record<string, unknown>) {
+  const labels = FIELD_LABELS[entityType];
+  return Object.keys(labels)
+    .filter((key) => key !== "author" && key !== "updatedAt")
+    .map((key) => {
+      const value = snapshot[key];
+      const display = Array.isArray(value) ? value.join(", ") : String(value ?? "");
+      if (!display.trim()) return null;
+      return (
+        <p key={key}>
+          <span className="text-xs text-subtle">{labels[key]}: </span>
+          <span className="whitespace-pre-wrap text-ink">{display}</span>
+        </p>
+      );
+    })
+    .filter(Boolean);
+}
+
 export default function PolicyListView() {
-  const [activeTab, setActiveTab] = useState<EntityType>("policy");
+  const [activeTab, setActiveTab] = useState<ViewTab>("policy");
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<Record<string, unknown>[]>([]);
+  const [activityItems, setActivityItems] = useState<ActivityEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openIds, setOpenIds] = useState<Set<string>>(new Set());
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const isEntityTab = activeTab !== "activity";
 
   useEffect(() => {
     setIsLoading(true);
     setError(null);
-    fetch(ENTITY_ENDPOINT[activeTab])
+    setConfirmDeleteId(null);
+    const endpoint = isEntityTab ? ENTITY_ENDPOINT[activeTab as EntityType] : "/api/activity";
+    fetch(endpoint)
       .then((res) => res.json())
-      .then((data) => setItems(data.items ?? []))
+      .then((data) => {
+        if (isEntityTab) setItems(data.items ?? []);
+        else setActivityItems(data.items ?? []);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setIsLoading(false));
-  }, [activeTab]);
+  }, [activeTab, isEntityTab]);
 
-  const rows = useMemo(() => items.map((item) => toRowView(activeTab, item)), [items, activeTab]);
-  const filtered = useMemo(() => {
+  const rows = useMemo(
+    () => (isEntityTab ? items.map((item) => toRowView(activeTab as EntityType, item)) : []),
+    [items, activeTab, isEntityTab],
+  );
+  const filteredRows = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return rows;
     return rows.filter((row) => row.searchText.includes(needle));
   }, [rows, query]);
+
+  const filteredActivity = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return activityItems;
+    return activityItems.filter((entry) =>
+      [entry.label, entry.actor, ACTION_LABEL[entry.action]].join(" ").toLowerCase().includes(needle),
+    );
+  }, [activityItems, query]);
 
   function toggleOpen(id: string) {
     setOpenIds((prev) => {
@@ -151,24 +233,40 @@ export default function PolicyListView() {
     });
   }
 
+  async function handleConfirmDelete(id: string) {
+    if (!isEntityTab) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`${ENTITY_ENDPOINT[activeTab as EntityType]}/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "삭제에 실패했습니다.");
+      setItems((prev) => prev.filter((item) => String(item.id) !== id));
+      setConfirmDeleteId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="border-b border-border px-6 py-5">
         <h1 className="mb-4 text-xl font-semibold text-ink">등록된 항목 목록</h1>
         <div className="mb-3 flex gap-1">
-          {TABS.map((type) => (
+          {TABS.map((tab) => (
             <button
-              key={type}
+              key={tab}
               type="button"
               onClick={() => {
-                setActiveTab(type);
+                setActiveTab(tab);
                 setQuery("");
               }}
               className={`rounded-control px-3 py-1.5 text-sm font-medium ${
-                activeTab === type ? "bg-primary/10 text-primary" : "text-subtle hover:bg-page-bg"
+                activeTab === tab ? "bg-primary/10 text-primary" : "text-subtle hover:bg-page-bg"
               }`}
             >
-              {ENTITY_LABEL[type]}
+              {TAB_LABEL[tab]}
             </button>
           ))}
         </div>
@@ -178,7 +276,7 @@ export default function PolicyListView() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="정책명, 세부항목, 설명으로 검색"
+            placeholder={isEntityTab ? "정책명, 세부항목, 설명으로 검색" : "대상, 작업자로 검색"}
             className="w-full rounded-control border border-border py-2.5 pl-9 pr-3 text-sm text-ink focus:border-primary focus:outline-none"
           />
         </div>
@@ -188,46 +286,134 @@ export default function PolicyListView() {
         {error && <p className="py-4 text-sm text-danger">{error}</p>}
         {isLoading ? (
           <p className="py-10 text-center text-sm text-subtle">불러오는 중...</p>
-        ) : filtered.length === 0 ? (
-          <p className="py-10 text-center text-sm text-subtle">등록된 항목이 없습니다.</p>
+        ) : isEntityTab ? (
+          filteredRows.length === 0 ? (
+            <p className="py-10 text-center text-sm text-subtle">등록된 항목이 없습니다.</p>
+          ) : (
+            <div className="divide-y divide-border-subtle">
+              {filteredRows.map((row) => {
+                const isOpen = openIds.has(row.id);
+                const isConfirming = confirmDeleteId === row.id;
+                return (
+                  <div key={row.id}>
+                    <div className="flex items-center gap-2 py-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleOpen(row.id)}
+                        className="flex flex-1 items-center gap-3 text-left hover:opacity-80"
+                      >
+                        {row.badge && (
+                          <span
+                            className={`shrink-0 rounded-pill px-2.5 py-0.5 text-xs font-medium ${colorForBadge(row.badge)}`}
+                          >
+                            {row.badge}
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-ink">{row.title}</span>
+                          {row.subtitle && <span className="block truncate text-xs text-subtle">{row.subtitle}</span>}
+                        </span>
+                        <ChevronDownIcon
+                          className={`size-4 shrink-0 text-subtle transition-transform ${isOpen ? "rotate-180" : ""}`}
+                        />
+                      </button>
+                      {isConfirming ? (
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <span className="text-xs text-danger">삭제할까요?</span>
+                          <button
+                            type="button"
+                            disabled={isDeleting}
+                            onClick={() => handleConfirmDelete(row.id)}
+                            className="rounded-control bg-danger px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 disabled:cursor-not-allowed"
+                          >
+                            {isDeleting ? "삭제 중..." : "확인"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="rounded-control px-2.5 py-1 text-xs text-subtle hover:bg-page-bg"
+                          >
+                            취소
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(row.id)}
+                          className="shrink-0 rounded-control px-2.5 py-1 text-xs text-subtle hover:bg-danger-bg hover:text-danger"
+                        >
+                          삭제
+                        </button>
+                      )}
+                    </div>
+                    {isOpen && (
+                      <div className="space-y-1.5 pb-4 pl-1 pr-8 text-sm">
+                        {row.bodyLines.length === 0 ? (
+                          <p className="text-subtle">추가 설명이 없습니다.</p>
+                        ) : (
+                          row.bodyLines.map((line) => (
+                            <p key={line.label}>
+                              <span className="text-xs text-subtle">{line.label}: </span>
+                              <span className="whitespace-pre-wrap text-ink">{line.value}</span>
+                            </p>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )
+        ) : filteredActivity.length === 0 ? (
+          <p className="py-10 text-center text-sm text-subtle">활동 이력이 없습니다.</p>
         ) : (
           <div className="divide-y divide-border-subtle">
-            {filtered.map((row) => {
-              const isOpen = openIds.has(row.id);
+            {filteredActivity.map((entry) => {
+              const isOpen = openIds.has(entry.id);
               return (
-                <div key={row.id}>
+                <div key={entry.id}>
                   <button
                     type="button"
-                    onClick={() => toggleOpen(row.id)}
+                    onClick={() => toggleOpen(entry.id)}
                     className="flex w-full items-center gap-3 py-3 text-left hover:bg-page-bg/60"
                   >
-                    {row.badge && (
-                      <span
-                        className={`shrink-0 rounded-pill px-2.5 py-0.5 text-xs font-medium ${colorForBadge(row.badge)}`}
-                      >
-                        {row.badge}
-                      </span>
-                    )}
+                    <span
+                      className={`shrink-0 rounded-pill px-2.5 py-0.5 text-xs font-medium ${ACTION_BADGE[entry.action]}`}
+                    >
+                      {ACTION_LABEL[entry.action]}
+                    </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-ink">{row.title}</span>
-                      {row.subtitle && <span className="block truncate text-xs text-subtle">{row.subtitle}</span>}
+                      <span className="block truncate text-sm font-medium text-ink">{entry.label}</span>
+                      <span className="block truncate text-xs text-subtle">
+                        {formatDateTime(entry.at)} · {entry.actor}
+                      </span>
                     </span>
                     <ChevronDownIcon
                       className={`size-4 shrink-0 text-subtle transition-transform ${isOpen ? "rotate-180" : ""}`}
                     />
                   </button>
                   {isOpen && (
-                    <div className="space-y-1.5 pb-4 pl-1 pr-8 text-sm">
-                      {row.bodyLines.length === 0 ? (
-                        <p className="text-subtle">추가 설명이 없습니다.</p>
-                      ) : (
-                        row.bodyLines.map((line) => (
-                          <p key={line.label}>
-                            <span className="text-xs text-subtle">{line.label}: </span>
-                            <span className="whitespace-pre-wrap text-ink">{line.value}</span>
-                          </p>
-                        ))
+                    <div className="space-y-3 pb-4 pl-1 pr-8 text-sm">
+                      {entry.action === "revised" && entry.previousSnapshot && (
+                        <div>
+                          <p className="mb-1 text-xs font-medium text-subtle">변경 전</p>
+                          <div className="space-y-1 rounded-control bg-page-bg p-3">
+                            {renderSnapshotLines(entry.entityType, entry.previousSnapshot)}
+                          </div>
+                        </div>
                       )}
+                      {entry.snapshot && (
+                        <div>
+                          <p className="mb-1 text-xs font-medium text-subtle">
+                            {entry.action === "deleted" ? "삭제 당시 내용" : entry.action === "revised" ? "변경 후" : "등록 내용"}
+                          </p>
+                          <div className="space-y-1 rounded-control bg-page-bg p-3">
+                            {renderSnapshotLines(entry.entityType, entry.snapshot)}
+                          </div>
+                        </div>
+                      )}
+                      {!entry.snapshot && <p className="text-subtle">상세 내용이 없습니다.</p>}
                     </div>
                   )}
                 </div>
@@ -238,7 +424,9 @@ export default function PolicyListView() {
       </div>
 
       <div className="border-t border-border px-6 py-3">
-        <span className="text-xs text-subtle">총 {filtered.length}건</span>
+        <span className="text-xs text-subtle">
+          총 {isEntityTab ? filteredRows.length : filteredActivity.length}건
+        </span>
       </div>
     </div>
   );

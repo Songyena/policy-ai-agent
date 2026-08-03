@@ -9,6 +9,8 @@ const envSchema = z.object({
   TERMS_CONDITIONS_DATA_PATH: z.string().default("./data/knowledge/terms_conditions.json"),
   ACTIVITY_LOG_PATH: z.string().default("./data/knowledge/activity.json"),
   USERS_DATA_PATH: z.string().default("./data/users.json"),
+  CHATS_DATA_DIR: z.string().default("./data/chats"),
+  CHAT_RETENTION_HOURS: z.coerce.number().positive().default(24),
   SESSION_SECRET: z.string().min(1, "SESSION_SECRET이 필요합니다."),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });

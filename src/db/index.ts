@@ -5,6 +5,9 @@ export {
   registerPolicy,
   registerTerm,
   registerTermsConditions,
+  deletePolicy,
+  deleteTerm,
+  deleteTermsConditions,
   initAllStores,
   type RegisterResult,
 } from "./registry";

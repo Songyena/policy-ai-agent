@@ -26,8 +26,12 @@ export async function register() {
   try {
     const { initAllStores } = await import("./db/index");
     const { initUsersStore } = await import("./auth/userStore");
+    const { startPeriodicCleanup } = await import("./db/chatSessionStore");
     initAllStores();
     initUsersStore();
+    // 보관기간(CHAT_RETENTION_HOURS)이 지난 대화 세션을 1시간마다 정리한다(쓰기 시점의
+    // lazy cleanup과 별개로, 한동안 아무도 채팅을 쓰지 않아도 볼륨에 계속 쌓이지 않도록).
+    startPeriodicCleanup(1);
   } catch (error) {
     console.error(
       "[instrumentation] 초기화 실패 - GEMINI_API_KEY/SESSION_SECRET 환경변수가 설정되어 있는지, " +

@@ -10,6 +10,14 @@ export interface RecordWithMeta<TFields> {
 
 export type StoredRecord<TFields> = TFields & RecordWithMeta<TFields>;
 
+/** StoredRecord에서 id/revision/history를 뺀 순수 필드만 남긴다(활동 로그 스냅샷 등에 사용). */
+export function toFields<TFields extends Record<string, unknown>>(
+  record: StoredRecord<TFields>,
+): TFields {
+  const { id: _id, revision: _revision, history: _history, ...fields } = record;
+  return fields as unknown as TFields;
+}
+
 interface StoreShape<TFields> {
   version: 1;
   items: StoredRecord<TFields>[];

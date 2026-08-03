@@ -16,5 +16,9 @@ export const ActivityLogEntrySchema = z.object({
   label: z.string(), // 표시용 대표 명칭 (policyName/standardTerm/termsName)
   actor: z.string(),
   at: z.string(), // ISO 8601
+  /** created: 생성된 필드 / revised: 개정 후 필드 / deleted: 삭제 당시(삭제 직전) 필드. */
+  snapshot: z.record(z.string(), z.unknown()).optional(),
+  /** revised에서만 사용 — 개정 전 필드. 이력 화면에서 변경 전/후를 비교하기 위한 것. */
+  previousSnapshot: z.record(z.string(), z.unknown()).optional(),
 });
 export type ActivityLogEntry = z.infer<typeof ActivityLogEntrySchema>;

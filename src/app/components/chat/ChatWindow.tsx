@@ -32,6 +32,7 @@ export default function ChatWindow({ userName }: ChatWindowProps) {
   const [isUploading, setIsUploading] = useState(false);
 
   const apiHistoryRef = useRef<ChatCompletionMessageParam[]>([]);
+  const sessionIdRef = useRef<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -78,12 +79,13 @@ export default function ChatWindow({ userName }: ChatWindowProps) {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextHistory, mode }),
+        body: JSON.stringify({ messages: nextHistory, mode, sessionId: sessionIdRef.current }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "응답을 받지 못했습니다.");
 
       apiHistoryRef.current = [...nextHistory, ...(data.appendedMessages ?? [])];
+      sessionIdRef.current = data.sessionId ?? sessionIdRef.current;
       appendDisplay({
         id: nextMessageId(),
         role: "assistant",
