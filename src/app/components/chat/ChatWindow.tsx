@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import ExcelValidationModal, { type ExcelCommitSummary } from "./ExcelValidationModal";
 import MessageBubble from "./MessageBubble";
@@ -16,14 +16,37 @@ function nextMessageId(): string {
 const INPUT_PLACEHOLDER =
   "정책/용어/이용약관을 물어보거나 등록해보세요 · '/'로 빠른 명령 · 📎로 엑셀 업로드";
 
-interface ChatWindowProps {
-  userName: string;
+/**
+ * 저장된 원본 메시지(OpenAI 호환 형식: system/user/assistant/tool)를 화면에 보여줄 버블 목록으로
+ * 바꾼다. tool 메시지, 텍스트 없이 tool_calls만 있는 assistant 메시지는 원래도 화면에 안 보였던
+ * 것들이라 건너뛴다 — 확인 카드처럼 turn 한정으로만 존재하던 상태는 복원하지 않는다.
+ */
+function messagesToDisplay(messages: Record<string, unknown>[]): DisplayMessage[] {
+  const result: DisplayMessage[] = [];
+  for (const message of messages) {
+    const role = message.role;
+    const content = typeof message.content === "string" ? message.content : "";
+    if (!content.trim()) continue;
+    if (role === "user" || role === "assistant") {
+      result.push({ id: nextMessageId(), role, content });
+    }
+  }
+  return result;
 }
 
-export default function ChatWindow({ userName }: ChatWindowProps) {
+interface ChatWindowProps {
+  userName: string;
+  /** 사이드바에서 선택한 기존 세션을 이어서 보여줄 때 전달한다. 없으면 새 대화로 시작한다. */
+  initialSessionId?: string;
+  /** 이번 턴에 세션이 새로 생성되거나 갱신됐을 때 호출한다(사이드바 목록 갱신용). */
+  onSessionUpdate?: (sessionId: string) => void;
+}
+
+export default function ChatWindow({ userName, initialSessionId, onSessionUpdate }: ChatWindowProps) {
   const [display, setDisplay] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isLoadingSession, setIsLoadingSession] = useState(Boolean(initialSessionId));
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [parsedWorkbook, setParsedWorkbook] = useState<{
     sheets: { type: "policy" | "term" | "termsConditions"; sheetName: string; rows: { rowIndex: number; fields: Record<string, unknown>; errors: Record<string, string> }[] }[];
@@ -32,9 +55,32 @@ export default function ChatWindow({ userName }: ChatWindowProps) {
   const [isUploading, setIsUploading] = useState(false);
 
   const apiHistoryRef = useRef<ChatCompletionMessageParam[]>([]);
-  const sessionIdRef = useRef<string | undefined>(undefined);
+  const sessionIdRef = useRef<string | undefined>(initialSessionId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // initialSessionId가 있으면(사이드바에서 이전 대화를 선택한 경우) 저장된 메시지를 불러와
+  // 대화를 이어간다. ChatShell이 세션 전환/새 대화마다 이 컴포넌트를 key로 다시 마운트시키므로,
+  // 여기서는 "마운트 시 한 번"만 신경 쓰면 된다.
+  useEffect(() => {
+    if (!initialSessionId) return;
+    let cancelled = false;
+    fetch(`/api/chat/sessions/${initialSessionId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled || !data.session) return;
+        const messages = data.session.messages as Record<string, unknown>[];
+        apiHistoryRef.current = messages as unknown as ChatCompletionMessageParam[];
+        setDisplay(messagesToDisplay(messages));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setIsLoadingSession(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function appendDisplay(message: DisplayMessage) {
     setDisplay((prev) => [...prev, message]);
@@ -85,7 +131,10 @@ export default function ChatWindow({ userName }: ChatWindowProps) {
       if (!res.ok) throw new Error(data.error ?? "응답을 받지 못했습니다.");
 
       apiHistoryRef.current = [...nextHistory, ...(data.appendedMessages ?? [])];
-      sessionIdRef.current = data.sessionId ?? sessionIdRef.current;
+      if (data.sessionId) {
+        sessionIdRef.current = data.sessionId;
+        onSessionUpdate?.(data.sessionId);
+      }
       appendDisplay({
         id: nextMessageId(),
         role: "assistant",
@@ -229,7 +278,11 @@ export default function ChatWindow({ userName }: ChatWindowProps) {
     <div className="flex h-full flex-col">
       <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleFileSelected} />
 
-      {display.length === 0 ? (
+      {isLoadingSession ? (
+        <div className="flex flex-1 items-center justify-center">
+          <span className="text-sm text-subtle">이전 대화를 불러오는 중...</span>
+        </div>
+      ) : display.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center px-6">
           <div className="w-full max-w-2xl">
             <h1 className="mb-6 text-center text-2xl font-semibold text-ink">

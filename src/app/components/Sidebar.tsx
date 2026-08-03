@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type JSX } from "react";
+import type { SessionSummary } from "./chat/types";
 import LogoutButton from "./LogoutButton";
 
 export type SidebarView = "chat" | "policies";
@@ -9,6 +10,10 @@ interface SidebarProps {
   userName: string;
   activeView: SidebarView;
   onChangeView: (view: SidebarView) => void;
+  sessions: SessionSummary[];
+  activeSessionId?: string;
+  onSelectSession: (sessionId: string) => void;
+  onNewChat: () => void;
 }
 
 function MessageCircleIcon({ className }: { className?: string }) {
@@ -40,12 +45,40 @@ function ChevronUpDownIcon({ className }: { className?: string }) {
   );
 }
 
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
 const NAV_ITEMS: { view: SidebarView; label: string; Icon: (props: { className?: string }) => JSX.Element }[] = [
   { view: "chat", label: "대화", Icon: MessageCircleIcon },
   { view: "policies", label: "정책 목록", Icon: ListIcon },
 ];
 
-export default function Sidebar({ userName, activeView, onChangeView }: SidebarProps) {
+/** "방금 전"/"3시간 전"/"어제" 같은 상대 시각. 세션 보관기간이 짧아(기본 24시간) 일 단위까지만 다룬다. */
+function relativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "방금 전";
+  if (minutes < 60) return `${minutes}분 전`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  return "어제";
+}
+
+export default function Sidebar({
+  userName,
+  activeView,
+  onChangeView,
+  sessions,
+  activeSessionId,
+  onSelectSession,
+  onNewChat,
+}: SidebarProps) {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const initial = userName.trim().charAt(0) || "?";
 
@@ -58,7 +91,7 @@ export default function Sidebar({ userName, activeView, onChangeView }: SidebarP
         <span className="text-sm font-semibold text-ink">정책 Agent</span>
       </div>
 
-      <nav className="flex-1 px-3">
+      <nav className="px-3">
         <p className="px-2 pb-2 text-xs font-medium text-subtle">메인</p>
         <ul className="space-y-1">
           {NAV_ITEMS.map(({ view, label, Icon }) => (
@@ -79,6 +112,41 @@ export default function Sidebar({ userName, activeView, onChangeView }: SidebarP
           ))}
         </ul>
       </nav>
+
+      <div className="mt-4 flex min-h-0 flex-1 flex-col px-3">
+        <div className="mb-1 flex items-center justify-between px-2">
+          <p className="text-xs font-medium text-subtle">이전 대화</p>
+          <button
+            type="button"
+            onClick={onNewChat}
+            title="새 대화"
+            className="flex size-6 items-center justify-center rounded-control text-subtle hover:bg-page-bg hover:text-ink"
+          >
+            <PlusIcon className="size-4" />
+          </button>
+        </div>
+        <ul className="flex-1 space-y-0.5 overflow-y-auto">
+          {sessions.length === 0 && (
+            <li className="px-2 py-2 text-xs text-subtle">최근 24시간 내 대화가 없습니다.</li>
+          )}
+          {sessions.map((session) => (
+            <li key={session.id}>
+              <button
+                type="button"
+                onClick={() => onSelectSession(session.id)}
+                className={`block w-full rounded-control px-2 py-1.5 text-left transition-colors ${
+                  session.id === activeSessionId
+                    ? "bg-primary/10 text-primary"
+                    : "text-ink hover:bg-page-bg"
+                }`}
+              >
+                <span className="block truncate text-sm">{session.title || "제목 없음"}</span>
+                <span className="block text-xs text-subtle">{relativeTime(session.updatedAt)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
 
       <div className="relative m-3 mt-0">
         {accountMenuOpen && (
