@@ -47,6 +47,19 @@ export default function ChatShell({ userName }: ChatShellProps) {
     refreshSessions();
   }
 
+  /** 사이드바의 "삭제" 메뉴에서 호출. 지금 보고 있던 대화를 지운 경우 빈 화면으로 되돌린다. */
+  async function handleDeleteSession(sessionId: string) {
+    const res = await fetch(`/api/chat/sessions/${sessionId}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? "삭제에 실패했습니다.");
+
+    setSessions((prev) => prev.filter((session) => session.id !== sessionId));
+    if (sessionId === activeSessionId) {
+      setActiveSessionId(undefined);
+      setChatInstanceKey((key) => key + 1);
+    }
+  }
+
   return (
     <div className="flex h-screen bg-page-bg">
       <Sidebar
@@ -57,6 +70,7 @@ export default function ChatShell({ userName }: ChatShellProps) {
         activeSessionId={activeSessionId}
         onSelectSession={handleSelectSession}
         onNewChat={handleNewChat}
+        onDeleteSession={handleDeleteSession}
       />
       <main className="flex-1 overflow-hidden">
         {activeView === "chat" ? (

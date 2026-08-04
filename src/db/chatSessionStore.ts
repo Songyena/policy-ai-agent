@@ -118,6 +118,20 @@ export function updateSessionMessages(
   return undefined;
 }
 
+/** 세션을 삭제한다. 본인 소유가 아니거나 이미 없는(만료 포함) 세션이면 false를 반환한다. */
+export function deleteSession(sessionId: string, userId: string): boolean {
+  const now = Date.now();
+  for (const dateKey of recentDateKeys()) {
+    const shard = shardFor(dateKey);
+    const existing = shard.getById(sessionId);
+    if (!existing) continue;
+    if (existing.userId !== userId || isExpired(existing, now)) return false;
+    shard.remove(sessionId);
+    return true;
+  }
+  return false;
+}
+
 /** 특정 사용자의(만료되지 않은) 세션을 최근 순으로 반환한다. */
 export function listSessionsForUser(userId: string): ChatSessionRecord[] {
   const now = Date.now();

@@ -11,10 +11,12 @@ data/raw/*
 data/staging/*
 data/knowledge/*
 data/chats/*
+data/backup/*
 !data/raw/.gitkeep
 !data/staging/.gitkeep
 !data/knowledge/.gitkeep
 !data/chats/.gitkeep
+!data/backup/.gitkeep
 
 # 계정 정보(비밀번호 해시/솔트 포함) — 커밋하지 않음
 data/users.json

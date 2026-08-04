@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type JSX } from "react";
+import { useEffect, useRef, useState, type JSX } from "react";
 import type { SessionSummary } from "./chat/types";
 import LogoutButton from "./LogoutButton";
 
@@ -14,6 +14,7 @@ interface SidebarProps {
   activeSessionId?: string;
   onSelectSession: (sessionId: string) => void;
   onNewChat: () => void;
+  onDeleteSession: (sessionId: string) => Promise<void>;
 }
 
 function MessageCircleIcon({ className }: { className?: string }) {
@@ -54,6 +55,25 @@ function PlusIcon({ className }: { className?: string }) {
   );
 }
 
+function MoreHorizontalIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="5" cy="12" r="1" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+    </svg>
+  );
+}
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
+
 const NAV_ITEMS: { view: SidebarView; label: string; Icon: (props: { className?: string }) => JSX.Element }[] = [
   { view: "chat", label: "대화", Icon: MessageCircleIcon },
   { view: "policies", label: "정책 목록", Icon: ListIcon },
@@ -78,9 +98,49 @@ export default function Sidebar({
   activeSessionId,
   onSelectSession,
   onNewChat,
+  onDeleteSession,
 }: SidebarProps) {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const initial = userName.trim().charAt(0) || "?";
+
+  // 대화 항목 "더보기(⋯)" 팝오버: 한 번에 하나만 열려 있어야 하므로 열린 세션 id 하나만 들고 있는다.
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenuId(null);
+        setConfirmingDeleteId(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openMenuId]);
+
+  function toggleMenu(sessionId: string) {
+    setDeleteError(null);
+    setConfirmingDeleteId(null);
+    setOpenMenuId((prev) => (prev === sessionId ? null : sessionId));
+  }
+
+  async function handleConfirmDelete(sessionId: string) {
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await onDeleteSession(sessionId);
+      setOpenMenuId(null);
+      setConfirmingDeleteId(null);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   return (
     <aside className="flex w-[220px] shrink-0 flex-col border-r border-border bg-surface">
@@ -125,26 +185,86 @@ export default function Sidebar({
             <PlusIcon className="size-4" />
           </button>
         </div>
+        <p className="mb-2 rounded-control bg-page-bg px-2.5 py-2 text-xs leading-relaxed text-subtle">
+          이전 대화는 24시간 동안만 보관돼요. 등록·수정 중인 내용을 반영하려면 대화 안에서
+          끝까지 진행해 등록을 완료해주세요.
+        </p>
         <ul className="flex-1 space-y-0.5 overflow-y-auto">
           {sessions.length === 0 && (
             <li className="px-2 py-2 text-xs text-subtle">최근 24시간 내 대화가 없습니다.</li>
           )}
-          {sessions.map((session) => (
-            <li key={session.id}>
-              <button
-                type="button"
-                onClick={() => onSelectSession(session.id)}
-                className={`block w-full rounded-control px-2 py-1.5 text-left transition-colors ${
-                  session.id === activeSessionId
-                    ? "bg-primary/10 text-primary"
-                    : "text-ink hover:bg-page-bg"
-                }`}
-              >
-                <span className="block truncate text-sm">{session.title || "제목 없음"}</span>
-                <span className="block text-xs text-subtle">{relativeTime(session.updatedAt)}</span>
-              </button>
-            </li>
-          ))}
+          {sessions.map((session) => {
+            const isMenuOpen = openMenuId === session.id;
+            const isConfirming = confirmingDeleteId === session.id;
+            return (
+              <li key={session.id} className="group relative">
+                <div className="flex items-center rounded-control transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => onSelectSession(session.id)}
+                    className={`block min-w-0 flex-1 rounded-control py-1.5 pl-2 pr-1 text-left ${
+                      session.id === activeSessionId
+                        ? "bg-primary/10 text-primary"
+                        : "text-ink hover:bg-page-bg"
+                    }`}
+                  >
+                    <span className="block truncate text-sm">{session.title || "제목 없음"}</span>
+                    <span className="block text-xs text-subtle">{relativeTime(session.updatedAt)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    title="더보기"
+                    onClick={() => toggleMenu(session.id)}
+                    className={`mr-1 flex size-6 shrink-0 items-center justify-center rounded-control text-subtle opacity-0 hover:bg-page-bg hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100 ${
+                      isMenuOpen ? "bg-page-bg text-ink opacity-100" : ""
+                    }`}
+                  >
+                    <MoreHorizontalIcon className="size-4" />
+                  </button>
+                </div>
+
+                {isMenuOpen && (
+                  <div
+                    ref={menuRef}
+                    className="absolute right-1 top-full z-20 mt-1 w-48 overflow-hidden rounded-control border border-border bg-surface shadow-card"
+                  >
+                    {isConfirming ? (
+                      <div className="p-3">
+                        <p className="mb-2 text-xs text-ink">이 대화를 삭제하시겠습니까?</p>
+                        {deleteError && <p className="mb-2 text-xs text-danger">{deleteError}</p>}
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingDeleteId(null)}
+                            className="rounded-control px-2.5 py-1 text-xs text-subtle hover:bg-page-bg"
+                          >
+                            취소
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isDeleting}
+                            onClick={() => handleConfirmDelete(session.id)}
+                            className="rounded-control bg-danger px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isDeleting ? "삭제 중..." : "삭제"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingDeleteId(session.id)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-danger hover:bg-danger-bg"
+                      >
+                        <TrashIcon className="size-4" />
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </div>
 
